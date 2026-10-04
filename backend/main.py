@@ -95,11 +95,8 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
-@router.get("")
-@router.get("/")
 @router.get("/health")
-@router.get("/api")
-@router.get("/api/health")
+@router.get("/healthz")
 def health():
     return {"status": "ok", "app": "QwenArch"}
 
@@ -201,6 +198,11 @@ def sync_to_miro(req: SyncMiroRequest):
 app.include_router(router, prefix="")
 app.include_router(router, prefix="/api")
 app.include_router(router, prefix="/api/index.py")
+
+@app.get("/")
+@app.get("/api")
+def root_status():
+    return {"status": "ok", "app": "QwenArch"}
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
