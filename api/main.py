@@ -204,19 +204,45 @@ def sync_to_miro(req: SyncMiroRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, HTMLResponse
+from pathlib import Path
+
+API_DIR = Path(__file__).resolve().parent
+DIST_DIR = API_DIR / "dist" if (API_DIR / "dist").exists() else API_DIR.parent / "frontend" / "dist"
+
 # Include router for root, /api, and /api/index.py to handle all Vercel proxying patterns
-app.include_router(router, prefix="")
 app.include_router(router, prefix="/api")
 app.include_router(router, prefix="/api/index.py")
+app.include_router(router, prefix="")
 
-@app.get("/")
-@app.get("/api")
-def root_status():
-    return {"status": "ok", "app": "QwenArch"}
+# Mount static assets if dist exists
+if (DIST_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="assets")
+
+if (DIST_DIR / "slides").exists():
+    app.mount("/slides", StaticFiles(directory=str(DIST_DIR / "slides")), name="slides")
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
+    fav = DIST_DIR / "favicon.ico"
+    if fav.exists():
+        return FileResponse(str(fav))
     return HTMLResponse(content="", status_code=204)
+
+@app.get("/slides.html", include_in_schema=False)
+def get_slides():
+    slides = DIST_DIR / "slides.html"
+    if slides.exists():
+        return FileResponse(str(slides))
+    return HTMLResponse("<h1>Slides not found</h1>", status_code=404)
+
+@app.get("/", include_in_schema=False)
+def serve_index():
+    index = DIST_DIR / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return {"status": "ok", "app": "QwenArch"}
 
 if __name__ == "__main__":
     import uvicorn
