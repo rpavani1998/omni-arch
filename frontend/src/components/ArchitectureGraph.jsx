@@ -10,7 +10,8 @@ import {
   Database,
   Zap,
   Inbox,
-  Plug
+  Plug,
+  Code2
 } from 'lucide-react';
 
 const TYPE_CONFIG = {
@@ -65,7 +66,7 @@ const TYPE_CONFIG = {
   }
 };
 
-export default function ArchitectureGraph({ architecture }) {
+export default function ArchitectureGraph({ architecture, onScaffold }) {
   if (!architecture || !architecture.layers) {
     return null;
   }
@@ -144,6 +145,23 @@ export default function ArchitectureGraph({ architecture }) {
                               • {feat}
                             </span>
                           ))}
+                        </div>
+                      )}
+
+                      {onScaffold && (
+                        <div className="node-card-footer">
+                          <button
+                            type="button"
+                            className="node-scaffold-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onScaffold(node);
+                            }}
+                            title={`Scaffold production starter code for ${node.name}`}
+                          >
+                            <Code2 size={12} />
+                            <span>Scaffold Code</span>
+                          </button>
                         </div>
                       )}
                     </div>

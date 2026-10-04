@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,13 +39,15 @@ miro_client = MiroClient()
 class AnalyzeRequest(BaseModel):
     source_type: str  # "github", "local", "prompt"
     source_value: str
-    provider: Optional[str] = "modelscope" # "modelscope", "ollama", "custom", "openai", "openrouter", "deepseek"
+    provider: Optional[str] = "custom" # "custom", "modelscope", "ollama", "openai", "openrouter", "deepseek"
     perspective: Optional[str] = "overview" # predefined perspective id
     custom_instructions: Optional[str] = "" # user focus / customization instructions
     # Custom AI Credentials
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     model_name: Optional[str] = None
+    # Optional GitHub Token
+    github_token: Optional[str] = None
 
 class SyncMiroRequest(BaseModel):
     architecture: Dict[str, Any]
@@ -150,7 +152,7 @@ def get_sample_repos():
 def analyze_codebase(req: AnalyzeRequest):
     try:
         if req.source_type == "github":
-            codebase_data = CodebaseAnalyzer.clone_and_scan_github(req.source_value)
+            codebase_data = CodebaseAnalyzer.fetch_github_repo(req.source_value, github_token=req.github_token)
         elif req.source_type == "local":
             codebase_data = CodebaseAnalyzer.scan_directory(req.source_value)
         elif req.source_type == "prompt":
@@ -158,14 +160,15 @@ def analyze_codebase(req: AnalyzeRequest):
                 "root_name": "Custom System",
                 "languages": {"Architecture Spec": 1},
                 "file_tree": ["system_spec.txt"],
-                "key_files": {"system_spec.txt": req.source_value}
+                "key_files": {"system_spec.txt": req.source_value},
+                "signatures": {}
             }
         else:
             raise HTTPException(status_code=400, detail="Invalid source_type")
 
-        analysis_result = qwen_engine.analyze_architecture(
+        analysis_result = engine.analyze_architecture(
             codebase_data, 
-            provider=req.provider or "modelscope",
+            provider=req.provider or "custom",
             perspective=req.perspective or "overview",
             custom_instructions=req.custom_instructions or "",
             api_key=req.api_key,
@@ -184,7 +187,7 @@ def analyze_codebase(req: AnalyzeRequest):
 def analyze_codebase_stream(req: AnalyzeRequest):
     try:
         if req.source_type == "github":
-            codebase_data = CodebaseAnalyzer.clone_and_scan_github(req.source_value)
+            codebase_data = CodebaseAnalyzer.fetch_github_repo(req.source_value, github_token=req.github_token)
         elif req.source_type == "local":
             codebase_data = CodebaseAnalyzer.scan_directory(req.source_value)
         elif req.source_type == "prompt":
@@ -192,15 +195,16 @@ def analyze_codebase_stream(req: AnalyzeRequest):
                 "root_name": "Custom System",
                 "languages": {"Architecture Spec": 1},
                 "file_tree": ["system_spec.txt"],
-                "key_files": {"system_spec.txt": req.source_value}
+                "key_files": {"system_spec.txt": req.source_value},
+                "signatures": {}
             }
         else:
             raise HTTPException(status_code=400, detail="Invalid source_type")
 
         return StreamingResponse(
-            qwen_engine.stream_architecture_analysis(
+            engine.stream_architecture_analysis(
                 codebase_data, 
-                provider=req.provider or "modelscope",
+                provider=req.provider or "custom",
                 perspective=req.perspective or "overview",
                 custom_instructions=req.custom_instructions or "",
                 api_key=req.api_key,
@@ -209,6 +213,38 @@ def analyze_codebase_stream(req: AnalyzeRequest):
             ),
             media_type="text/event-stream"
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ScaffoldRequest(BaseModel):
+    component_name: str
+    component_type: Optional[str] = "service"
+    tech: Optional[str] = "FastAPI"
+    description: Optional[str] = ""
+    endpoints: Optional[List[str]] = None
+    provider: Optional[str] = "custom"
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    model_name: Optional[str] = None
+
+@router.post("/scaffold")
+def scaffold_component(req: ScaffoldRequest):
+    try:
+        boilerplate = engine.scaffold_component_boilerplate(
+            component_name=req.component_name,
+            component_type=req.component_type or "service",
+            tech=req.tech or "FastAPI",
+            description=req.description or "",
+            endpoints=req.endpoints,
+            provider=req.provider or "custom",
+            api_key=req.api_key,
+            base_url=req.base_url,
+            model_name=req.model_name
+        )
+        return {
+            "success": True,
+            "scaffold": boilerplate
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

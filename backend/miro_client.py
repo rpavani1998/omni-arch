@@ -68,7 +68,7 @@ class MiroClient:
         resp.raise_for_status()
         return resp.json()
 
-    def create_shape(self, content: str, x: float, y: float, shape_type: str = "service", width: float = 220, height: float = 110) -> Dict[str, Any]:
+    def create_shape(self, content: str, x: float, y: float, shape_type: str = "service", width: float = 300, height: float = 140) -> Dict[str, Any]:
         url = f"{self.base_url}/boards/{self.board_id}/shapes"
         style_cfg = TYPE_STYLES.get(shape_type, TYPE_STYLES["service"])
 
@@ -104,7 +104,7 @@ class MiroClient:
         end_id: str, 
         caption: str = "", 
         stroke_color: str = "#0284c7",
-        shape: str = "curved"
+        shape: str = "elbow"
     ) -> Optional[Dict[str, Any]]:
         url = f"{self.base_url}/boards/{self.board_id}/connectors"
         clean_caption = (caption or "").strip()
@@ -135,7 +135,7 @@ class MiroClient:
             if resp.status_code in [200, 201]:
                 return resp.json()
             else:
-                # If custom style failed, fallback to minimal payload while preserving caption
+                # Fallback to minimal payload while preserving caption
                 fallback_payload = {
                     "startItem": {"id": start_id},
                     "endItem": {"id": end_id},
@@ -183,7 +183,7 @@ class MiroClient:
             print(f"[MiroClient] Frame creation exception: {e}")
             return None
 
-    def create_sticky_note(self, content: str, x: float, y: float, color: str = "light_yellow", width: float = 280) -> Dict[str, Any]:
+    def create_sticky_note(self, content: str, x: float, y: float, color: str = "light_yellow", width: float = 340) -> Dict[str, Any]:
         url = f"{self.base_url}/boards/{self.board_id}/sticky_notes"
         payload = {
             "data": {
@@ -528,4 +528,3 @@ class MiroClient:
             "created_connectors": len(created_connectors),
             "total_items": len(all_created_items) + len(created_connectors)
         }
-

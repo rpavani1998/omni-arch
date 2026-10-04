@@ -18,24 +18,29 @@ import {
   Zap, 
   History, 
   X, 
-  RotateCcw,
-  Clock,
-  Radio,
-  Coins,
-  Sun,
-  Moon,
-  Sliders,
-  Target,
-  Presentation,
-  Settings,
-  Key,
-  ShieldCheck,
-  Eye,
-  EyeOff,
-  Save,
-  Activity,
-  Box,
-  Database
+  RotateCcw, 
+  Clock, 
+  Radio, 
+  Coins, 
+  Sun, 
+  Moon, 
+  Sliders, 
+  Target, 
+  Presentation, 
+  Settings, 
+  Key, 
+  ShieldCheck, 
+  Eye, 
+  EyeOff, 
+  Save, 
+  Activity, 
+  Box, 
+  Database,
+  Code2,
+  Download,
+  Copy,
+  Check,
+  FileText
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import ArchitectureGraph from './components/ArchitectureGraph';
@@ -277,7 +282,8 @@ export default function App() {
         aiProvider: 'modelscope',
         aiApiKey: '',
         aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
-        aiModelName: 'Qwen/Qwen3.8-27B'
+        aiModelName: 'Qwen/Qwen3.8-27B',
+        githubToken: ''
       };
     } catch (e) {
       return {
@@ -286,7 +292,8 @@ export default function App() {
         aiProvider: 'modelscope',
         aiApiKey: '',
         aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
-        aiModelName: 'Qwen/Qwen3.8-27B'
+        aiModelName: 'Qwen/Qwen3.8-27B',
+        githubToken: ''
       };
     }
   });
@@ -294,8 +301,80 @@ export default function App() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showMiroToken, setShowMiroToken] = useState(false);
+  const [showGithubToken, setShowGithubToken] = useState(false);
   const [testingMiro, setTestingMiro] = useState(false);
   const [miroTestResult, setMiroTestResult] = useState(null);
+
+  // Bi-directional Scaffolding Modal State
+  const [showScaffoldModal, setShowScaffoldModal] = useState(false);
+  const [selectedScaffoldNode, setSelectedScaffoldNode] = useState(null);
+  const [scaffoldLoading, setScaffoldLoading] = useState(false);
+  const [scaffoldData, setScaffoldData] = useState(null);
+  const [scaffoldTab, setScaffoldTab] = useState('code'); // 'code' | 'dockerfile' | 'compose' | 'quickstart'
+  const [scaffoldError, setScaffoldError] = useState(null);
+  const [copiedScaffold, setCopiedScaffold] = useState(false);
+
+  const handleOpenScaffoldModal = async (node) => {
+    setSelectedScaffoldNode(node);
+    setShowScaffoldModal(true);
+    setScaffoldLoading(true);
+    setScaffoldError(null);
+    setScaffoldData(null);
+    setScaffoldTab('code');
+    setCopiedScaffold(false);
+
+    try {
+      const effectiveProvider = customSettings.aiProvider || provider;
+      const res = await fetch('/api/scaffold', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          component_name: node.name,
+          component_type: node.type || 'service',
+          tech: node.tech || 'FastAPI',
+          description: node.description || '',
+          endpoints: node.endpoints_or_features || [],
+          provider: effectiveProvider,
+          api_key: customSettings.aiApiKey || undefined,
+          base_url: customSettings.aiBaseUrl || undefined,
+          model_name: customSettings.aiModelName || undefined
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to generate scaffolding code');
+      if (data.scaffold) {
+        setScaffoldData(data.scaffold);
+      } else {
+        throw new Error('No scaffolding data returned from server');
+      }
+    } catch (err) {
+      console.error('Scaffold error:', err);
+      setScaffoldError(err.message || 'Failed to generate scaffolding code');
+    } finally {
+      setScaffoldLoading(false);
+    }
+  };
+
+  const handleCopyScaffoldCode = (text) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedScaffold(true);
+    setTimeout(() => setCopiedScaffold(false), 2000);
+  };
+
+  const handleDownloadScaffoldFile = (content, filename) => {
+    if (!content) return;
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -369,7 +448,8 @@ export default function App() {
       aiProvider: 'modelscope',
       aiApiKey: '',
       aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
-      aiModelName: 'Qwen/Qwen3.8-27B'
+      aiModelName: 'Qwen/Qwen3.8-27B',
+      githubToken: ''
     };
     setCustomSettings(defaults);
     try {
@@ -571,6 +651,7 @@ export default function App() {
           api_key: customSettings.aiApiKey || undefined,
           base_url: customSettings.aiBaseUrl || undefined,
           model_name: customSettings.aiModelName || undefined,
+          github_token: customSettings.githubToken || undefined,
           perspective: selectedPerspective,
           custom_instructions: customInstructions
         })
@@ -1309,7 +1390,7 @@ export default function App() {
 
           {/* Architecture Graph Render or Live Generating State */}
           {architecture ? (
-            <ArchitectureGraph architecture={architecture} />
+            <ArchitectureGraph architecture={architecture} onScaffold={handleOpenScaffoldModal} />
           ) : (
             <div className="empty-state-card">
               <div className={`empty-icon-circle ${loading ? 'spinning' : ''}`}>
@@ -1573,6 +1654,40 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {/* Section 3: GitHub Authentication (Optional) */}
+              <div className="settings-section">
+                <div className="settings-section-title">
+                  <div className="section-badge github-badge">GitHub</div>
+                  <h4>GitHub Personal Access Token (Optional)</h4>
+                </div>
+                <p className="settings-desc">
+                  Provide a personal access token (PAT) to analyze private GitHub repositories or avoid public API rate limits (60 req/hr).
+                </p>
+
+                <div className="settings-grid">
+                  <div className="settings-field full-width">
+                    <label>GitHub PAT Token</label>
+                    <div className="input-with-action">
+                      <input
+                        type={showGithubToken ? 'text' : 'password'}
+                        placeholder="ghp_..."
+                        value={customSettings.githubToken || ''}
+                        onChange={(e) => setCustomSettings({ ...customSettings, githubToken: e.target.value })}
+                        className="settings-input"
+                      />
+                      <button
+                        type="button"
+                        className="input-eye-btn"
+                        onClick={() => setShowGithubToken(!showGithubToken)}
+                        title={showGithubToken ? 'Hide token' : 'Show token'}
+                      >
+                        {showGithubToken ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="modal-footer">
@@ -1597,6 +1712,243 @@ export default function App() {
                 <span>Save & Apply Settings</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bi-directional Code Scaffolding Modal */}
+      {showScaffoldModal && (
+        <div className="modal-overlay" onClick={() => setShowScaffoldModal(false)}>
+          <div className="modal-card scaffold-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title-group">
+                <Code2 size={20} className="modal-icon" />
+                <div>
+                  <h3>Scaffold Starter Code: {selectedScaffoldNode?.name || 'Component'}</h3>
+                  <div className="scaffold-header-badges">
+                    {selectedScaffoldNode?.tech && (
+                      <span className="scaffold-badge tech">{selectedScaffoldNode.tech}</span>
+                    )}
+                    {selectedScaffoldNode?.type && (
+                      <span className="scaffold-badge type">{selectedScaffoldNode.type}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button 
+                className="modal-close-btn" 
+                onClick={() => setShowScaffoldModal(false)}
+                aria-label="Close Scaffolding Drawer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {scaffoldLoading ? (
+              <div className="scaffold-loading-state">
+                <RefreshCw size={28} className="spin" style={{ color: '#38bdf8' }} />
+                <div>
+                  <h4>Generating Component Boilerplate...</h4>
+                  <p>Synthesizing production route handlers, Docker container specs, and orchestration files.</p>
+                </div>
+              </div>
+            ) : scaffoldError ? (
+              <div className="scaffold-body">
+                <div className="test-result-badge error" style={{ padding: '1rem', width: '100%', marginBottom: '1rem' }}>
+                  <AlertTriangle size={18} />
+                  <span>{scaffoldError}</span>
+                </div>
+                <button
+                  type="button"
+                  className="test-btn"
+                  onClick={() => selectedScaffoldNode && handleOpenScaffoldModal(selectedScaffoldNode)}
+                >
+                  <RefreshCw size={14} />
+                  <span>Retry Generation</span>
+                </button>
+              </div>
+            ) : scaffoldData ? (
+              <>
+                {/* Tabs bar */}
+                <div className="scaffold-nav-tabs">
+                  <button
+                    type="button"
+                    className={`scaffold-tab ${scaffoldTab === 'code' ? 'active' : ''}`}
+                    onClick={() => setScaffoldTab('code')}
+                  >
+                    <FileCode size={14} />
+                    <span>Implementation Code</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`scaffold-tab ${scaffoldTab === 'dockerfile' ? 'active' : ''}`}
+                    onClick={() => setScaffoldTab('dockerfile')}
+                  >
+                    <Box size={14} />
+                    <span>Dockerfile</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`scaffold-tab ${scaffoldTab === 'compose' ? 'active' : ''}`}
+                    onClick={() => setScaffoldTab('compose')}
+                  >
+                    <Layers size={14} />
+                    <span>docker-compose.yml</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`scaffold-tab ${scaffoldTab === 'quickstart' ? 'active' : ''}`}
+                    onClick={() => setScaffoldTab('quickstart')}
+                  >
+                    <Terminal size={14} />
+                    <span>Quickstart Guide</span>
+                  </button>
+                </div>
+
+                {/* Body Content */}
+                <div className="scaffold-body">
+                  {scaffoldTab === 'code' && (
+                    <div>
+                      <div className="scaffold-toolbar">
+                        <span className="scaffold-filename">
+                          {selectedScaffoldNode?.tech?.toLowerCase().includes('python') || selectedScaffoldNode?.tech?.toLowerCase().includes('fastapi')
+                            ? 'main.py'
+                            : selectedScaffoldNode?.tech?.toLowerCase().includes('go')
+                            ? 'main.go'
+                            : selectedScaffoldNode?.tech?.toLowerCase().includes('rust')
+                            ? 'main.rs'
+                            : 'server.ts'}
+                        </span>
+                        <div className="scaffold-actions">
+                          <button
+                            type="button"
+                            className={`scaffold-action-btn ${copiedScaffold ? 'success' : ''}`}
+                            onClick={() => handleCopyScaffoldCode(scaffoldData.boilerplate)}
+                          >
+                            {copiedScaffold ? <Check size={13} /> : <Copy size={13} />}
+                            <span>{copiedScaffold ? 'Copied' : 'Copy Code'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="scaffold-action-btn"
+                            onClick={() => handleDownloadScaffoldFile(
+                              scaffoldData.boilerplate,
+                              selectedScaffoldNode?.tech?.toLowerCase().includes('python') ? 'main.py' : 'server.ts'
+                            )}
+                          >
+                            <Download size={13} />
+                            <span>Download</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="scaffold-code-viewer">
+                        <pre>{scaffoldData.boilerplate}</pre>
+                      </div>
+                    </div>
+                  )}
+
+                  {scaffoldTab === 'dockerfile' && (
+                    <div>
+                      <div className="scaffold-toolbar">
+                        <span className="scaffold-filename">Dockerfile</span>
+                        <div className="scaffold-actions">
+                          <button
+                            type="button"
+                            className={`scaffold-action-btn ${copiedScaffold ? 'success' : ''}`}
+                            onClick={() => handleCopyScaffoldCode(scaffoldData.dockerfile)}
+                          >
+                            {copiedScaffold ? <Check size={13} /> : <Copy size={13} />}
+                            <span>{copiedScaffold ? 'Copied' : 'Copy Dockerfile'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="scaffold-action-btn"
+                            onClick={() => handleDownloadScaffoldFile(scaffoldData.dockerfile, 'Dockerfile')}
+                          >
+                            <Download size={13} />
+                            <span>Download</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="scaffold-code-viewer">
+                        <pre>{scaffoldData.dockerfile}</pre>
+                      </div>
+                    </div>
+                  )}
+
+                  {scaffoldTab === 'compose' && (
+                    <div>
+                      <div className="scaffold-toolbar">
+                        <span className="scaffold-filename">docker-compose.yml</span>
+                        <div className="scaffold-actions">
+                          <button
+                            type="button"
+                            className={`scaffold-action-btn ${copiedScaffold ? 'success' : ''}`}
+                            onClick={() => handleCopyScaffoldCode(scaffoldData.compose)}
+                          >
+                            {copiedScaffold ? <Check size={13} /> : <Copy size={13} />}
+                            <span>{copiedScaffold ? 'Copied' : 'Copy Compose'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="scaffold-action-btn"
+                            onClick={() => handleDownloadScaffoldFile(scaffoldData.compose, 'docker-compose.yml')}
+                          >
+                            <Download size={13} />
+                            <span>Download</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="scaffold-code-viewer">
+                        <pre>{scaffoldData.compose}</pre>
+                      </div>
+                    </div>
+                  )}
+
+                  {scaffoldTab === 'quickstart' && (
+                    <div>
+                      <div className="scaffold-toolbar">
+                        <span className="scaffold-filename">README.md / Run Commands</span>
+                        <div className="scaffold-actions">
+                          <button
+                            type="button"
+                            className={`scaffold-action-btn ${copiedScaffold ? 'success' : ''}`}
+                            onClick={() => handleCopyScaffoldCode(scaffoldData.quickstart)}
+                          >
+                            {copiedScaffold ? <Check size={13} /> : <Copy size={13} />}
+                            <span>{copiedScaffold ? 'Copied' : 'Copy Guide'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="scaffold-action-btn"
+                            onClick={() => handleDownloadScaffoldFile(scaffoldData.quickstart, 'README-scaffold.md')}
+                          >
+                            <Download size={13} />
+                            <span>Download</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div className="scaffold-code-viewer">
+                        <pre>{scaffoldData.quickstart}</pre>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="modal-footer">
+                  <span className="scaffold-footer-note">
+                    Generated with {customSettings.aiModelName || 'Universal AI Model'} for {selectedScaffoldNode?.name}
+                  </span>
+                  <button
+                    type="button"
+                    className="save-btn"
+                    onClick={() => setShowScaffoldModal(false)}
+                  >
+                    <span>Done</span>
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       )}

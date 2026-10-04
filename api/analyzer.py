@@ -28,11 +28,90 @@ KEY_CONFIG_FILES = {
     "openapi.json", "prisma.schema", "schema.prisma"
 }
 
+# Secret and Credential Redaction Patterns
+SECRET_PATTERNS = [
+    (re.compile(r'AKIA[0-9A-Z]{16}', re.IGNORECASE), '[REDACTED_AWS_KEY]'),
+    (re.compile(r'ghp_[0-9a-zA-Z]{36}', re.IGNORECASE), '[REDACTED_GITHUB_TOKEN]'),
+    (re.compile(r'sk-[0-9a-zA-Z]{20,}', re.IGNORECASE), '[REDACTED_OPENAI_KEY]'),
+    (re.compile(r'(?:bearer\s+)[a-zA-Z0-9_\-\.]{25,}', re.IGNORECASE), 'Bearer [REDACTED_TOKEN]'),
+    (re.compile(r'(?:postgres|mysql|mongodb|redis):\/\/[^:\s]+:[^@\s]+@[^\/\s]+', re.IGNORECASE), '[REDACTED_DB_CONNECTION_STRING]'),
+    (re.compile(r'-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA )?PRIVATE KEY-----'), '[REDACTED_PRIVATE_KEY]'),
+    (re.compile(r'(password|secret|api_key|access_token|private_key)\s*[:=]\s*["\'][^"\']{6,}["\']', re.IGNORECASE), r'\1: "[REDACTED_SECRET]"')
+]
+
+def redact_secrets(text: str) -> str:
+    """Scrubs passwords, tokens, API keys, and connection strings from text."""
+    if not text:
+        return ""
+    sanitized = text
+    for pattern, replacement in SECRET_PATTERNS:
+        sanitized = pattern.sub(replacement, sanitized)
+    return sanitized
+
+def extract_architectural_signatures(content: str, ext: str) -> Dict[str, List[str]]:
+    """Extracts high-signal structural signatures (endpoints, models, brokers, clients)."""
+    signatures: Dict[str, List[str]] = {
+        "routes": [],
+        "models": [],
+        "services_and_clients": []
+    }
+    
+    # 1. Route and Endpoint Extractor (Python, JS/TS, Go, Java)
+    route_patterns = [
+        re.compile(r'@(?:app|router|api)\.(get|post|put|delete|patch)\(\s*["\']([^"\']+)["\']', re.IGNORECASE),
+        re.compile(r'(?:app|router)\.(get|post|put|delete|patch|use)\(\s*["\']([^"\']+)["\']', re.IGNORECASE),
+        re.compile(r'export\s+(?:async\s+)?function\s+(GET|POST|PUT|DELETE|PATCH)', re.IGNORECASE),
+        re.compile(r'\.(?:GET|POST|PUT|DELETE|PATCH)\(\s*["\']([^"\']+)["\']', re.IGNORECASE),
+        re.compile(r'path\(\s*["\']([^"\']+)["\']', re.IGNORECASE)
+    ]
+    for pattern in route_patterns:
+        for match in pattern.finditer(content):
+            groups = match.groups()
+            if len(groups) == 2:
+                signatures["routes"].append(f"{groups[0].upper()} {groups[1]}")
+            elif len(groups) == 1:
+                signatures["routes"].append(f"{groups[0].upper()}")
+
+    # 2. Schema and Data Models Extractor
+    model_patterns = [
+        re.compile(r'class\s+([A-Za-z0-9_]+)\s*\((?:BaseModel|Base|models\.Model|db\.Model|Entity)\)', re.IGNORECASE),
+        re.compile(r'model\s+([A-Za-z0-9_]+)\s*\{', re.IGNORECASE),
+        re.compile(r'type\s+([A-Za-z0-9_]+)\s+struct\s*\{', re.IGNORECASE),
+        re.compile(r'interface\s+([A-Za-z0-9_]+(?:Schema|Model|Entity|DTO|Type|Payload))', re.IGNORECASE)
+    ]
+    for pattern in model_patterns:
+        for match in pattern.finditer(content):
+            signatures["models"].append(match.group(1))
+
+    # 3. Infrastructure & External Services Extractor
+    client_indicators = [
+        ("Redis", re.compile(r'\b(?:redis\.Redis|createClient|getRedisClient|RedisStore)\b', re.IGNORECASE)),
+        ("Kafka", re.compile(r'\b(?:KafkaProducer|KafkaConsumer|KafkaClient|KafkaJs)\b', re.IGNORECASE)),
+        ("RabbitMQ", re.compile(r'\b(?:pika\.|amqp|amqplib|RabbitMQ)\b', re.IGNORECASE)),
+        ("AWS S3", re.compile(r'\b(?:boto3\.client\(["\']s3["\']|@aws-sdk/client-s3)\b', re.IGNORECASE)),
+        ("AWS SQS", re.compile(r'\b(?:boto3\.client\(["\']sqs["\']|@aws-sdk/client-sqs)\b', re.IGNORECASE)),
+        ("Stripe", re.compile(r'\b(?:stripe\.|@stripe/stripe-js|StripeClient)\b', re.IGNORECASE)),
+        ("OpenAI", re.compile(r'\b(?:OpenAI\(|ChatOpenAI|openai\.)\b', re.IGNORECASE)),
+        ("PostgreSQL", re.compile(r'\b(?:pg|psycopg2|asyncpg|postgres)\b', re.IGNORECASE)),
+        ("Prisma", re.compile(r'\b(?:PrismaClient|prisma\.)\b', re.IGNORECASE)),
+        ("Elasticsearch", re.compile(r'\b(?:Elasticsearch|esClient)\b', re.IGNORECASE)),
+        ("Celery", re.compile(r'\b(?:Celery\(|@app\.task|shared_task)\b', re.IGNORECASE))
+    ]
+    for name, regex in client_indicators:
+        if regex.search(content):
+            signatures["services_and_clients"].append(name)
+
+    # Deduplicate lists
+    signatures["routes"] = list(dict.fromkeys(signatures["routes"]))[:15]
+    signatures["models"] = list(dict.fromkeys(signatures["models"]))[:12]
+    signatures["services_and_clients"] = list(dict.fromkeys(signatures["services_and_clients"]))[:10]
+    return signatures
+
 class CodebaseAnalyzer:
-    """Scans and extracts structural architecture signatures from codebases."""
+    """Scans and extracts structural architecture signatures and AST summaries from codebases."""
 
     @staticmethod
-    def scan_directory(root_path: str, max_files: int = 120, max_file_size_kb: int = 40) -> Dict[str, Any]:
+    def scan_directory(root_path: str, max_files: int = 150, max_file_size_kb: int = 50) -> Dict[str, Any]:
         root = Path(root_path)
         if not root.exists():
             raise FileNotFoundError(f"Path does not exist: {root_path}")
@@ -41,6 +120,10 @@ class CodebaseAnalyzer:
         key_files_content: Dict[str, str] = {}
         total_files = 0
         languages: Dict[str, int] = {}
+        
+        aggregated_routes: List[str] = []
+        aggregated_models: List[str] = []
+        aggregated_integrations: List[str] = []
 
         for dirpath, dirnames, filenames in os.walk(root):
             # Prune ignored directories in-place
@@ -61,33 +144,36 @@ class CodebaseAnalyzer:
                 rel_path = os.path.join(rel_dir, fname) if rel_dir else fname
                 file_tree.append(rel_path)
 
-                # Count languages
                 if ext:
                     languages[ext] = languages.get(ext, 0) + 1
 
-                # Capture content of key config and entry files
                 full_path = Path(dirpath) / fname
                 is_key_config = fname in KEY_CONFIG_FILES
                 is_entry_or_route = any(k in rel_path.lower() for k in [
                     "router", "controller", "api", "service", "model", "schema",
-                    "main.", "app.", "server.", "index."
+                    "main.", "app.", "server.", "index.", "worker.", "queue.", "events."
                 ]) and ext in [".py", ".ts", ".js", ".go", ".rs", ".java", ".prisma", ".json", ".yml", ".yaml"]
 
-                if (is_key_config or is_entry_or_route) and len(key_files_content) < 14:
+                if (is_key_config or is_entry_or_route) and len(key_files_content) < 16:
                     try:
                         size_kb = full_path.stat().st_size / 1024
                         if size_kb <= max_file_size_kb:
                             with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                                content = f.read()
-                                if len(content.strip()) > 0:
-                                    # Keep concise summary of entry files
-                                    if len(content) > 1200:
-                                        content = content[:1200] + "\n... [truncated]"
-                                    key_files_content[rel_path] = content
+                                raw_content = f.read()
+                                if len(raw_content.strip()) > 0:
+                                    sanitized = redact_secrets(raw_content)
+                                    # Extract structural signatures
+                                    sigs = extract_architectural_signatures(sanitized, ext)
+                                    aggregated_routes.extend(sigs["routes"])
+                                    aggregated_models.extend(sigs["models"])
+                                    aggregated_integrations.extend(sigs["services_and_clients"])
+
+                                    if len(sanitized) > 1200:
+                                        sanitized = sanitized[:1200] + "\n... [truncated]"
+                                    key_files_content[rel_path] = sanitized
                     except Exception:
                         pass
 
-        # Sort file tree for clean display
         file_tree = sorted(file_tree)[:max_files]
 
         return {
@@ -95,38 +181,45 @@ class CodebaseAnalyzer:
             "total_files_scanned": total_files,
             "languages": languages,
             "file_tree": file_tree,
-            "key_files": key_files_content
+            "key_files": key_files_content,
+            "signatures": {
+                "discovered_routes": list(dict.fromkeys(aggregated_routes))[:20],
+                "discovered_models": list(dict.fromkeys(aggregated_models))[:15],
+                "discovered_integrations": list(dict.fromkeys(aggregated_integrations))[:10]
+            }
         }
 
     @staticmethod
-    def clone_and_scan_github(repo_url: str) -> Dict[str, Any]:
-        """Clones or downloads a GitHub repository and scans its structure."""
-        temp_dir = tempfile.mkdtemp(prefix="qwen_repo_")
+    def fetch_github_repo(repo_url: str, github_token: Optional[str] = None) -> Dict[str, Any]:
+        clean_url = repo_url.strip().rstrip("/")
+        if not clean_url.startswith("http"):
+            clean_url = f"https://github.com/{clean_url}"
+
+        match = re.match(r"https?://github\.com/([^/]+)/([^/]+)", clean_url)
+        if not match:
+            raise ValueError(f"Invalid GitHub URL: {repo_url}. Expected format: owner/repo or https://github.com/owner/repo")
+
+        owner, repo = match.group(1), match.group(2).replace(".git", "")
+        temp_dir = tempfile.mkdtemp(prefix="omniarch_repo_")
+
         try:
-            clean_url = repo_url.strip().rstrip("/")
-            if clean_url.endswith(".git"):
-                clean_url = clean_url[:-4]
-
-            # Parse GitHub owner/repo: e.g. https://github.com/owner/repo
-            match = re.search(r"github\.com/([^/]+)/([^/]+)", clean_url)
             downloaded = False
+            headers = {"User-Agent": "OmniArch-Scanner"}
+            if github_token:
+                headers["Authorization"] = f"Bearer {github_token}"
 
-            if match:
-                owner, repo = match.group(1), match.group(2)
-                # Try downloading zip archive directly (works on serverless without git CLI)
-                for branch in ["main", "master"]:
-                    zip_url = f"https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip"
-                    try:
-                        resp = requests.get(zip_url, headers={"User-Agent": "QwenArch-Scanner"}, timeout=15)
-                        if resp.status_code == 200:
-                            with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
-                                z.extractall(temp_dir)
-                            downloaded = True
-                            break
-                    except Exception:
-                        pass
+            for branch in ["main", "master"]:
+                zip_url = f"https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip"
+                try:
+                    resp = requests.get(zip_url, headers=headers, timeout=15)
+                    if resp.status_code == 200:
+                        with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
+                            z.extractall(temp_dir)
+                        downloaded = True
+                        break
+                except Exception:
+                    pass
 
-            # Fallback to git clone if zip download failed and git is installed
             if not downloaded:
                 try:
                     import subprocess
@@ -137,7 +230,6 @@ class CodebaseAnalyzer:
                     if not downloaded:
                         raise RuntimeError(f"Could not clone or download repository '{repo_url}': {e}")
 
-            # Find the actual root directory (if extracted from zip, it will be inside a subfolder like repo-main)
             subdirs = [os.path.join(temp_dir, d) for d in os.listdir(temp_dir) if os.path.isdir(os.path.join(temp_dir, d))]
             scan_target = subdirs[0] if len(subdirs) == 1 and not (Path(temp_dir) / "package.json").exists() else temp_dir
 
@@ -150,10 +242,10 @@ class CodebaseAnalyzer:
             except Exception:
                 pass
 
-def analyze_codebase(source_type: str, source_value: str) -> Dict[str, Any]:
+def analyze_codebase(source_type: str, source_value: str, github_token: Optional[str] = None) -> Dict[str, Any]:
     """Helper function to analyze codebase either from local path or GitHub URL."""
     if source_type == "github":
-        return CodebaseAnalyzer.fetch_github_repo(source_value)
+        return CodebaseAnalyzer.fetch_github_repo(source_value, github_token=github_token)
     else:
         res = CodebaseAnalyzer.scan_directory(source_value)
         res["source_type"] = "local"

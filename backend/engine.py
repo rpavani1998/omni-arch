@@ -1,7 +1,7 @@
 import os
 import json
 import re
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -113,6 +113,17 @@ class QwenEngine:
         context_parts.append("\n--- KEY MANIFESTS & ENTRY FILES ---")
         for fpath, content in codebase_data.get("key_files", {}).items():
             context_parts.append(f"\n[FILE: {fpath}]\n{content}\n")
+
+        # Add discovered structural signatures (AST extraction)
+        sigs = codebase_data.get("signatures", {})
+        if sigs:
+            context_parts.append("\n--- EXTRACTED ARCHITECTURAL SIGNATURES ---")
+            if sigs.get("discovered_routes"):
+                context_parts.append(f"Discovered Endpoints & Handlers: {json.dumps(sigs['discovered_routes'])}")
+            if sigs.get("discovered_models"):
+                context_parts.append(f"Discovered Entities & Schema Models: {json.dumps(sigs['discovered_models'])}")
+            if sigs.get("discovered_integrations"):
+                context_parts.append(f"Discovered Clients & Infrastructure: {json.dumps(sigs['discovered_integrations'])}")
 
         # Add perspective directive
         if perspective in PERSPECTIVE_DIRECTIVES:
@@ -246,6 +257,75 @@ class QwenEngine:
         """Convenience method returning the architecture graph dictionary directly."""
         res = self.analyze_architecture(codebase_data, provider, perspective, custom_instructions, api_key, base_url, model_name)
         return res.get("architecture", self._get_fallback())
+
+    def scaffold_component_boilerplate(
+        self,
+        component_name: str,
+        component_type: str = "service",
+        tech: str = "FastAPI",
+        description: str = "",
+        endpoints: Optional[List[str]] = None,
+        provider: str = "custom",
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        model_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Scaffolds production-grade starter code, Dockerfile, and docker-compose block for a service node."""
+        client, target_model, provider_label = self._get_client_and_model(provider, api_key, base_url, model_name)
+        
+        prompt = f"""You are a Principal Software Engineer. Generate production-ready boilerplate starter code for an architectural component with the following specifications:
+Component Name: {component_name}
+Component Type: {component_type}
+Technology / Framework: {tech or 'FastAPI / Python'}
+Description: {description}
+Endpoints / Features: {json.dumps(endpoints or [])}
+
+Output STRICT JSON only with the following schema:
+{{
+  "component_name": "{component_name}",
+  "file_name": "main.py or server.ts",
+  "source_code": "Full, working, clean starter code with imports, routes, healthcheck, and CORS",
+  "dockerfile": "Multi-stage production Dockerfile",
+  "compose_snippet": "Docker Compose service block",
+  "quickstart_commands": ["npm install or pip install -r requirements.txt", "docker build ..."]
+}}
+"""
+        try:
+            resp = client.chat.completions.create(
+                model=target_model,
+                messages=[
+                    {"role": "system", "content": "You are a senior full-stack developer who outputs strictly formatted JSON with production boilerplate code."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.2,
+                max_tokens=4096
+            )
+            raw = resp.choices[0].message.content or ""
+            cleaned = raw.strip()
+            if "```" in cleaned:
+                m = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", cleaned)
+                if m:
+                    cleaned = m.group(1)
+                else:
+                    cleaned = re.sub(r"```(?:json)?", "", cleaned).replace("```", "").strip()
+            
+            start_i = cleaned.find("{")
+            end_i = cleaned.rfind("}")
+            if start_i != -1 and end_i != -1 and end_i > start_i:
+                return json.loads(cleaned[start_i:end_i+1])
+        except Exception as e:
+            print(f"[Engine] Scaffolding fallback: {e}")
+
+        # Reliable static fallback if model fails
+        safe_id = re.sub(r'[^a-zA-Z0-9_]', '_', component_name.lower())
+        return {
+            "component_name": component_name,
+            "file_name": "main.py",
+            "source_code": f'# Boilerplate starter for {component_name}\nfrom fastapi import FastAPI\nfrom fastapi.middleware.cors import CORSMiddleware\n\napp = FastAPI(title="{component_name}", description="{description}")\n\napp.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])\n\n@app.get("/health")\ndef health():\n    return {{"status": "healthy", "service": "{component_name}"}}\n',
+            "dockerfile": f"FROM python:3.11-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY . .\nCMD [\"uvicorn\", \"main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8000\"]\n",
+            "compose_snippet": f"  {safe_id}:\n    build: .\n    ports:\n      - \"8000:8000\"\n    environment:\n      - ENV=production\n",
+            "quickstart_commands": ["pip install fastapi uvicorn", "uvicorn main:app --reload"]
+        }
 
     def _call_llm_direct(self, client: OpenAI, target_model: str, provider_label: str, user_content: str):
         try:

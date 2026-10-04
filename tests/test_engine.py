@@ -70,8 +70,30 @@ class TestArchitectureEngine(unittest.TestCase):
         # Verify provider label resolution handles multiple AI providers
         providers = ["modelscope", "openai", "ollama", "custom"]
         for p in providers:
-            # Asserts that provider strings are accepted
             self.assertIn(p, ["modelscope", "openai", "ollama", "custom"])
+
+    def test_scaffold_component_boilerplate(self):
+        from unittest.mock import patch, MagicMock
+        with patch("openai.resources.chat.completions.Completions.create") as mock_create:
+            mock_resp = MagicMock()
+            mock_resp.choices = [
+                MagicMock(message=MagicMock(content='{"component_name": "Auth Worker", "file_name": "main.py", "source_code": "# code", "dockerfile": "FROM python", "compose_snippet": "auth:", "quickstart_commands": ["pip install"]}'))
+            ]
+            mock_create.return_value = mock_resp
+            
+            scaffold = self.engine.scaffold_component_boilerplate(
+                component_name="Auth Worker",
+                component_type="service",
+                tech="FastAPI",
+                description="Validates tokens and issues sessions",
+                endpoints=["POST /login", "POST /refresh"]
+            )
+            self.assertIn("component_name", scaffold)
+            self.assertIn("source_code", scaffold)
+            self.assertIn("dockerfile", scaffold)
+            self.assertIn("compose_snippet", scaffold)
+            self.assertIn("quickstart_commands", scaffold)
+            self.assertEqual(scaffold["component_name"], "Auth Worker")
 
 if __name__ == "__main__":
     unittest.main()
