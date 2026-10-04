@@ -6,9 +6,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from analyzer import CodebaseAnalyzer
-from qwen_engine import QwenEngine
-from miro_client import MiroClient
+try:
+    from analyzer import CodebaseAnalyzer
+    from qwen_engine import QwenEngine
+    from miro_client import MiroClient
+except ImportError:
+    try:
+        from api.analyzer import CodebaseAnalyzer
+        from api.qwen_engine import QwenEngine
+        from api.miro_client import MiroClient
+    except ImportError:
+        from backend.analyzer import CodebaseAnalyzer
+        from backend.qwen_engine import QwenEngine
+        from backend.miro_client import MiroClient
 
 load_dotenv()
 
