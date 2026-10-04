@@ -221,13 +221,17 @@ class MiroClient:
 
         # Multi-perspective offset coordinates to maintain separate gallery frames on the same board
         PERSPECTIVE_OFFSETS = {
-            "overview": {"x": 0, "y": 0, "title": "System Overview"},
-            "data_flow": {"x": 3600, "y": 0, "title": "Data Flow & Request Lifecycle"},
-            "security_auth": {"x": 7200, "y": 0, "title": "Security & Zero-Trust Auth"},
-            "event_driven": {"x": 0, "y": 2400, "title": "Event-Driven & Async Pipelines"},
-            "database_storage": {"x": 3600, "y": 2400, "title": "Database & Storage Topology"},
-            "devops_cloud": {"x": 7200, "y": 2400, "title": "Cloud & Infrastructure"},
-            "ai_rag": {"x": 0, "y": 4800, "title": "AI / LLM & RAG Pipeline"}
+            "overview": {"x": 0, "y": 0, "title": "System Architecture (HLD)"},
+            "data_flow": {"x": 3600, "y": 0, "title": "Request Lifecycle & API Flow"},
+            "database_storage": {"x": 7200, "y": 0, "title": "Data Model & Schema Topology"},
+            "devops_pipeline": {"x": 0, "y": 2400, "title": "CI/CD & DevOps Deployment Pipeline"},
+            "security_auth": {"x": 3600, "y": 2400, "title": "Security & Zero-Trust Auth"},
+            "async_workers": {"x": 7200, "y": 2400, "title": "Async Task Queues & Worker Pipelines"},
+            "observability": {"x": 0, "y": 4800, "title": "Observability & SRE Monitoring"},
+            "ai_rag": {"x": 3600, "y": 4800, "title": "AI / LLM & RAG Pipeline"},
+            # Aliases for compatibility
+            "event_driven": {"x": 7200, "y": 2400, "title": "Async Task Queues & Event Pipelines"},
+            "devops_cloud": {"x": 0, "y": 2400, "title": "Cloud & Infrastructure"}
         }
 
         persp_info = PERSPECTIVE_OFFSETS.get(perspective or "overview", {"x": 0, "y": 0, "title": "System Architecture"})

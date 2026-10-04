@@ -469,6 +469,34 @@ html, body {
   border-color: var(--border-active);
 }
 
+.default-directive-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid #0284c7;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius-sm);
+  margin-top: 0.2rem;
+}
+
+.default-directive-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #0284c7;
+}
+
+.default-directive-text {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
 .custom-focus-header {
   display: flex;
   justify-content: space-between;
@@ -525,7 +553,7 @@ html, body {
 
 .quick-focus-chip {
   font-size: 0.68rem;
-  padding: 0.2rem 0.5rem;
+  padding: 0.25rem 0.55rem;
   border-radius: 4px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
@@ -534,6 +562,7 @@ html, body {
   font-family: var(--font-sans);
   font-weight: 500;
   transition: all 0.15s ease;
+  user-select: none;
 }
 
 .quick-focus-chip:hover {
@@ -547,6 +576,118 @@ html, body {
   color: var(--btn-primary-text);
   border-color: var(--btn-primary-bg);
   font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.addon-section-header {
+  margin-top: 0.35rem;
+  margin-bottom: 0.15rem;
+}
+
+.addon-section-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: var(--font-heading);
+}
+
+.prompt-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.prompt-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 0.25rem 0.55rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.prompt-action-btn:hover {
+  background: var(--bg-subtle-hover);
+  color: var(--text-primary);
+  border-color: var(--border-card);
+}
+
+.prompt-action-btn.primary {
+  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(14, 165, 233, 0.4);
+  color: #0284c7;
+  font-weight: 600;
+}
+
+.prompt-action-btn.primary:hover {
+  background: rgba(14, 165, 233, 0.22);
+}
+
+.prompt-action-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.saved-prompts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+  padding: 0.45rem 0.6rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.saved-prompts-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.saved-prompts-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.saved-prompt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  padding: 0.15rem 0.45rem;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.saved-prompt-chip:hover {
+  border-color: var(--btn-primary-bg);
+}
+
+.saved-prompt-delete {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: bold;
+  padding: 0 0.1rem;
+}
+
+.saved-prompt-delete:hover {
+  color: #ef4444;
 }
 
 /* Presets Group */

@@ -77,13 +77,17 @@ Rules:
 """
 
 PERSPECTIVE_DIRECTIVES = {
-    "overview": "Generate a comprehensive end-to-end system architecture overview decomposing presentation tier, API gateway, core backend microservices, data persistence stores, and external integrations.",
-    "data_flow": "Focus specifically on the end-to-end data lifecycle: client requests, API routing, synchronous gRPC/REST service calls, database reads/writes, and cache retrieval pathways.",
-    "security_auth": "Focus exclusively on security boundaries: authentication mechanisms (JWT/OAuth2/OIDC), API gateway token validation, session authorization, secrets storage, and protected domain services.",
-    "event_driven": "Emphasize asynchronous messaging patterns: Kafka / RabbitMQ / Redis event streams, pub/sub topics, background worker consumers, event-driven triggers, and failure retry queues.",
-    "database_storage": "Focus on data layer topology: primary SQL tables, relational foreign keys, distributed NoSQL stores, Redis session caching, connection pooling, and replication/sharding strategies.",
-    "devops_cloud": "Structure the diagram around cloud infrastructure: Docker containers, Kubernetes pods, ingress controllers, load balancers, CDN caching, and production cloud deployment tiers.",
-    "ai_rag": "Focus on AI system components: user input orchestrator, embedding models, vector database retrieval, LLM inference agent workflows, tool calls, and streaming output."
+    "overview": "Decompose the system into presentation clients, API gateway ingress, core application microservices, data persistence stores, and external third-party integrations with clear boundary responsibilities.",
+    "data_flow": "Trace end-to-end request lifecycle from client action through gateway routing, authentication/authorization validation, internal service-to-service calls, database reads/writes, cache lookups, and response return.",
+    "database_storage": "Focus on data persistence architecture: core entity schemas, primary database tables/collections, foreign key relations, transactional boundaries, Redis caching layers, and connection pooling.",
+    "devops_pipeline": "Map the continuous integration and deployment lifecycle: Git repository triggers, automated lint/test stages, Docker containerization, artifact registry packaging, cloud infrastructure deployment, and environment promotion.",
+    "security_auth": "Analyze security and trust boundaries: public vs private subnet zones, OAuth2/OIDC/JWT authentication flows, API gateway rate limiting, RBAC permission checks, secret management, and secure communication protocols.",
+    "async_workers": "Highlight asynchronous background processing: task queue ingestion, distributed worker pool execution, cron schedulers, webhook consumers, pub/sub messaging channels, and retry / dead-letter queues.",
+    "observability": "Structure the observability and site reliability architecture: distributed trace propagation, Prometheus metrics exporters, structured logging pipelines, health check probes, and automated alerting integrations.",
+    "ai_rag": "Deconstruct the AI / RAG architecture: user prompt orchestrator, document chunking & vector database retrieval, LLM inference agent workflows, tool calling integrations, memory store, and streaming response output.",
+    # Aliases for compatibility
+    "event_driven": "Highlight asynchronous background processing: task queue ingestion, distributed worker pool execution, cron schedulers, webhook consumers, pub/sub messaging channels, and retry / dead-letter queues.",
+    "devops_cloud": "Map the continuous integration and deployment lifecycle: Git repository triggers, automated lint/test stages, Docker containerization, artifact registry packaging, cloud infrastructure deployment, and environment promotion."
 }
 
 class QwenEngine:

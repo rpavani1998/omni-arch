@@ -92,45 +92,102 @@ const DEFAULT_PRESETS_DATA = [
 const DIAGRAM_PERSPECTIVES = [
   {
     id: 'overview',
-    label: 'System Overview',
-    description: 'Multi-tier breakdown of frontend, API gateway, microservices, databases, and third-party APIs.',
-    directive: 'Generate a comprehensive end-to-end system architecture overview decomposing presentation tier, API gateway, core backend microservices, data persistence stores, and external integrations.'
+    label: '1. High-Level Architecture (HLD / C4 Component)',
+    badge: 'System Design',
+    description: 'Presentation tier, API gateway ingress, core microservices, data persistence stores, and external cloud integrations.',
+    directive: 'Decompose the complete architecture into presentation clients, API gateway ingress, core application microservices, data persistence stores, and external third-party integrations with clear boundary responsibilities.'
   },
   {
     id: 'data_flow',
-    label: 'Data Flow & Request Lifecycle',
-    description: 'Traces client requests, synchronous API paths, database queries, and caching pathways.',
-    directive: 'Focus specifically on the end-to-end data lifecycle: client requests, API routing, synchronous gRPC/REST service calls, database reads/writes, and cache retrieval pathways.'
-  },
-  {
-    id: 'security_auth',
-    label: 'Security & Zero-Trust Auth',
-    description: 'Authentication (JWT/OAuth2), API gateway token validation, session boundaries, and encryption.',
-    directive: 'Focus exclusively on security boundaries: authentication mechanisms (JWT/OAuth2/OIDC), API gateway token validation, session authorization, secrets storage, and protected domain services.'
-  },
-  {
-    id: 'event_driven',
-    label: 'Event-Driven & Async Pipelines',
-    description: 'Kafka / RabbitMQ event streams, pub/sub topics, worker consumers, and background tasks.',
-    directive: 'Emphasize asynchronous messaging patterns: Kafka / RabbitMQ / Redis event streams, pub/sub topics, background worker consumers, event-driven triggers, and failure retry queues.'
+    label: '2. Request Lifecycle & API Execution Flow',
+    badge: 'API & Execution',
+    description: 'Traces client requests, routing, auth validation, internal RPC calls, database queries, and cache lookups.',
+    directive: 'Trace end-to-end request lifecycle from client action through gateway routing, authentication/authorization validation, internal service-to-service calls, database reads/writes, cache lookups, and response return.'
   },
   {
     id: 'database_storage',
-    label: 'Database & Storage Topology',
-    description: 'Relational SQL tables, NoSQL collections, Redis caching, connection pooling, and sharding.',
-    directive: 'Focus on data layer topology: primary SQL tables, relational foreign keys, distributed NoSQL stores, Redis session caching, connection pooling, and replication/sharding strategies.'
+    label: '3. Data Model & Schema Topology (LLD / ERD)',
+    badge: 'Data Layer',
+    description: 'Relational SQL tables, NoSQL collections, foreign keys, transaction boundaries, and Redis caching layers.',
+    directive: 'Focus on data persistence architecture: core entity schemas, primary database tables/collections, foreign key relations, transactional boundaries, Redis caching layers, and connection pooling.'
   },
   {
-    id: 'devops_cloud',
-    label: 'Cloud & Infrastructure',
-    description: 'Docker containers, Kubernetes pods, ingress controllers, load balancers, and CDN caching.',
-    directive: 'Structure the diagram around cloud infrastructure: Docker containers, Kubernetes pods, ingress controllers, load balancers, CDN caching, and production cloud deployment tiers.'
+    id: 'devops_pipeline',
+    label: '4. CI/CD & DevOps Deployment Pipeline',
+    badge: 'DevOps & SRE',
+    description: 'Git triggers, automated testing, Docker build stages, artifact registry, and cloud environment promotion.',
+    directive: 'Map the continuous integration and deployment lifecycle: Git repository triggers, automated lint/test stages, Docker containerization, artifact registry packaging, cloud infrastructure deployment, and environment promotion.'
+  },
+  {
+    id: 'security_auth',
+    label: '5. Security, Auth & Zero-Trust Boundary',
+    badge: 'Security',
+    description: 'OAuth2/OIDC/JWT flows, token verification, API gateway rate limiting, RBAC permissions, and secret vault storage.',
+    directive: 'Analyze security and trust boundaries: public vs private subnet zones, OAuth2/OIDC/JWT authentication flows, API gateway rate limiting, RBAC permission checks, secret management, and secure communication protocols.'
+  },
+  {
+    id: 'async_workers',
+    label: '6. Async Task Queues & Worker Pipelines',
+    badge: 'Background Jobs',
+    description: 'Task queues, worker pools, cron schedulers, webhook ingestion, pub/sub topics, and retry dead-letter queues.',
+    directive: 'Highlight asynchronous background processing: task queue ingestion, distributed worker pool execution, cron schedulers, webhook consumers, pub/sub messaging channels, and retry / dead-letter queues.'
+  },
+  {
+    id: 'observability',
+    label: '7. Observability, Distributed Tracing & SRE',
+    badge: 'Monitoring',
+    description: 'OpenTelemetry trace propagation, Prometheus metrics, structured logging pipelines, and automated alerts.',
+    directive: 'Structure the observability and site reliability architecture: distributed trace propagation, Prometheus metrics exporters, structured logging pipelines, health check probes, and automated alerting integrations.'
   },
   {
     id: 'ai_rag',
-    label: 'AI / LLM & RAG Pipeline',
-    description: 'Embeddings, vector database retrieval, LLM agents, prompt execution, and multimodal streaming.',
-    directive: 'Focus on AI system components: user input orchestrator, embedding models, vector database retrieval, LLM inference agent workflows, tool calls, and streaming output.'
+    label: '8. AI / LLM & RAG Agentic Pipeline',
+    badge: 'AI & Agents',
+    description: 'Prompt orchestration, document chunking, vector DB retrieval, LLM reasoning loop, and streaming output.',
+    directive: 'Deconstruct the AI / RAG architecture: user prompt orchestrator, document chunking & vector database retrieval, LLM inference agent workflows, tool calling integrations, memory store, and streaming response output.'
+  }
+];
+
+const SDLC_ADDON_PROMPTS = [
+  {
+    id: 'addon_caching',
+    label: '⚡ Multi-Tier Caching & CDN',
+    prompt: 'Include multi-level caching strategies (Redis in-memory caching, CDN edge caching, and query result caches) with TTL policies.'
+  },
+  {
+    id: 'addon_security',
+    label: '🔒 Strict RBAC & Zero-Trust',
+    prompt: 'Enforce strict RBAC role authorization, granular API permission scopes, encrypted tokens, and least-privilege security boundaries.'
+  },
+  {
+    id: 'addon_resilience',
+    label: '🔁 Circuit Breaker & Retries',
+    prompt: 'Detail failure resilience: circuit breakers, exponential backoff retries, fallback responses, and dead-letter queues (DLQ).'
+  },
+  {
+    id: 'addon_observability',
+    label: '📊 OpenTelemetry & Metrics',
+    prompt: 'Include OpenTelemetry distributed trace IDs, Prometheus metrics collection, and centralized structured log aggregation.'
+  },
+  {
+    id: 'addon_testing',
+    label: '🧪 Test Mocks & E2E Points',
+    prompt: 'Specify automated testing boundaries: unit test mock interfaces, integration test fixtures, and end-to-end API assertion checkpoints.'
+  },
+  {
+    id: 'addon_docker',
+    label: '📦 Containers & Port Mappings',
+    prompt: 'Detail Docker container boundaries, exposed network port bindings, environment variable injection, and volume mounts.'
+  },
+  {
+    id: 'addon_multitenancy',
+    label: '🏢 Multi-Tenant Data Isolation',
+    prompt: 'Highlight multi-tenant isolation: tenant ID propagation, row-level security (RLS), and isolated database schema boundaries.'
+  },
+  {
+    id: 'addon_transactions',
+    label: '💾 ACID & Read/Write Splitting',
+    prompt: 'Detail transactional consistency: ACID transaction scopes, primary write vs read-replica pools, and database connection pooling.'
   }
 ];
 
@@ -164,6 +221,41 @@ export default function App() {
   const [showReasoning, setShowReasoning] = useState(false);
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+
+  const [savedCustomPrompts, setSavedCustomPrompts] = useState(() => {
+    try {
+      const saved = localStorage.getItem('qwenarch_saved_prompts');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const handleSaveCurrentPrompt = () => {
+    if (!customInstructions.trim()) return;
+    const promptName = prompt('Enter a name for this custom architecture directive preset:');
+    if (!promptName || !promptName.trim()) return;
+    const newEntry = {
+      id: 'custom-' + Date.now(),
+      name: promptName.trim(),
+      prompt: customInstructions.trim(),
+      perspective: selectedPerspective
+    };
+    const updated = [newEntry, ...savedCustomPrompts.filter(p => p.name !== newEntry.name)].slice(0, 15);
+    setSavedCustomPrompts(updated);
+    try {
+      localStorage.setItem('qwenarch_saved_prompts', JSON.stringify(updated));
+    } catch (e) {}
+  };
+
+  const handleDeleteSavedPrompt = (id, e) => {
+    e.stopPropagation();
+    const updated = savedCustomPrompts.filter(p => p.id !== id);
+    setSavedCustomPrompts(updated);
+    try {
+      localStorage.setItem('qwenarch_saved_prompts', JSON.stringify(updated));
+    } catch (e) {}
+  };
 
   const [customSettings, setCustomSettings] = useState(() => {
     try {
@@ -743,24 +835,16 @@ export default function App() {
             </div>
           )}
 
-          {/* Diagram Perspective & Focus Directives */}
+          {/* Diagram Perspective & SDLC Use-Cases */}
           <div className="custom-focus-section">
             <div className="input-group">
               <label className="input-label">
-                <span>Diagram Perspective & Focus Mode</span>
-                <span style={{ color: 'var(--text-secondary)' }}>Predefined Use-Cases</span>
+                <span>Diagram Perspective & SDLC Use-Case</span>
+                <span style={{ color: 'var(--text-secondary)' }}>8 Standard SDLC Tiers</span>
               </label>
               <select
                 value={selectedPerspective}
-                onChange={(e) => {
-                  const pId = e.target.value;
-                  setSelectedPerspective(pId);
-                  const matched = DIAGRAM_PERSPECTIVES.find(p => p.id === pId);
-                  if (matched) {
-                    setCustomInstructions(matched.directive);
-                    setShowCustomFocus(true);
-                  }
-                }}
+                onChange={(e) => setSelectedPerspective(e.target.value)}
                 className="perspective-select"
               >
                 {DIAGRAM_PERSPECTIVES.map(p => (
@@ -771,16 +855,31 @@ export default function App() {
               </select>
             </div>
 
+            {/* Default Diagram Goal / Base Prompt Preview */}
+            {(() => {
+              const activeP = DIAGRAM_PERSPECTIVES.find(p => p.id === selectedPerspective) || DIAGRAM_PERSPECTIVES[0];
+              return (
+                <div className="default-directive-preview">
+                  <div className="default-directive-header">
+                    <Target size={13} />
+                    <span>Default Diagram Goal ({activeP.badge}):</span>
+                  </div>
+                  <p className="default-directive-text">{activeP.directive}</p>
+                </div>
+              );
+            })()}
+
+            {/* Extra Comments & Add-On Instructions */}
             <div 
               className="custom-focus-header" 
               onClick={() => setShowCustomFocus(!showCustomFocus)}
             >
               <div className="custom-focus-title">
                 <Sliders size={13} />
-                <span>Custom Architecture Directives</span>
+                <span>Add-On Instructions & Extra Comments</span>
               </div>
               <span className="optional-tag">
-                {showCustomFocus ? 'Hide Details' : (customInstructions.trim() ? 'Active Directives' : '+ Customize')}
+                {showCustomFocus ? 'Collapse' : (customInstructions.trim() ? `${customInstructions.length} chars added` : '+ Add Extra Instructions')}
               </span>
             </div>
 
@@ -789,38 +888,97 @@ export default function App() {
                 <textarea
                   className="text-area custom-focus-textarea"
                   rows={3}
-                  placeholder="What specific components or flows should Qwen prioritize? e.g., Detail auth & JWT token flow, highlight Kafka event streaming, or focus on PostgreSQL schema and Redis caching..."
+                  placeholder="Add extra instructions or comments for Qwen (e.g., Highlight Stripe billing webhooks, migrate auth to OAuth2, detail Redis cache TTL, or specify team constraints)..."
                   value={customInstructions}
                   onChange={(e) => setCustomInstructions(e.target.value)}
                 />
                 
-                {/* Quick Focus Preset Chips */}
-                <div className="quick-focus-chips">
-                  {[
-                    'JWT Auth & RBAC',
-                    'Kafka Event Bus',
-                    'Postgres & Redis Caching',
-                    'Microservice Domain Boundaries',
-                    'Envoy Ingress Gateway',
-                    'Kubernetes & Docker',
-                    'Vector DB & RAG'
-                  ].map((chip, cIdx) => (
-                    <button
-                      key={cIdx}
-                      type="button"
-                      className={`quick-focus-chip ${customInstructions.includes(chip) ? 'active' : ''}`}
-                      onClick={() => {
-                        if (customInstructions.includes(chip)) {
-                          setCustomInstructions(customInstructions.replace(chip, '').replace(/,\s*,/g, ',').replace(/^,\s*|,\s*$/g, '').trim());
-                        } else {
-                          setCustomInstructions(prev => prev.trim() ? `${prev.trim()}, ${chip}` : chip);
-                        }
-                      }}
-                    >
-                      {chip}
-                    </button>
-                  ))}
+                {/* SDLC Add-On Directives Section */}
+                <div className="addon-section-header">
+                  <span className="addon-section-label">⚡ Quick Add-On Directives (Click to toggle & append):</span>
                 </div>
+
+                <div className="quick-focus-chips">
+                  {SDLC_ADDON_PROMPTS.map((addon) => {
+                    const isSelected = customInstructions.includes(addon.prompt);
+                    return (
+                      <button
+                        key={addon.id}
+                        type="button"
+                        className={`quick-focus-chip ${isSelected ? 'active' : ''}`}
+                        title={addon.prompt}
+                        onClick={() => {
+                          if (isSelected) {
+                            setCustomInstructions(prev => 
+                              prev.replace(addon.prompt, '')
+                                  .replace(/,\s*,/g, ',')
+                                  .replace(/^[\s,]+|[\s,]+$/g, '')
+                                  .trim()
+                            );
+                          } else {
+                            setCustomInstructions(prev => {
+                              const base = prev.trim();
+                              return base ? `${base} ${addon.prompt}` : addon.prompt;
+                            });
+                          }
+                        }}
+                      >
+                        {addon.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Prompt Actions: Save Preset & Reset */}
+                <div className="prompt-actions-row">
+                  <button
+                    type="button"
+                    className="prompt-action-btn primary"
+                    onClick={handleSaveCurrentPrompt}
+                    title="Save extra instructions as reusable preset"
+                  >
+                    <Save size={12} />
+                    <span>Save Add-On Preset</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="prompt-action-btn danger"
+                    onClick={() => setCustomInstructions('')}
+                    title="Clear extra instructions"
+                  >
+                    <X size={12} />
+                    <span>Clear</span>
+                  </button>
+                </div>
+
+                {/* User Saved Presets List */}
+                {savedCustomPrompts.length > 0 && (
+                  <div className="saved-prompts-container">
+                    <span className="saved-prompts-label">My Saved Add-On Presets:</span>
+                    <div className="saved-prompts-list">
+                      {savedCustomPrompts.map(sp => (
+                        <div
+                          key={sp.id}
+                          className="saved-prompt-chip"
+                          onClick={() => {
+                            if (sp.perspective) setSelectedPerspective(sp.perspective);
+                            setCustomInstructions(sp.prompt);
+                          }}
+                          title={`Click to load: "${sp.name}"`}
+                        >
+                          <span>{sp.name}</span>
+                          <span 
+                            className="saved-prompt-delete"
+                            onClick={(e) => handleDeleteSavedPrompt(sp.id, e)}
+                            title="Delete preset"
+                          >
+                            ×
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
