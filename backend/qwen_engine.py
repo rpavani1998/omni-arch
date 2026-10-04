@@ -76,6 +76,16 @@ Rules:
 4. Ensure realistic, detailed components reflecting the scanned codebase.
 """
 
+PERSPECTIVE_DIRECTIVES = {
+    "overview": "Generate a comprehensive end-to-end system architecture overview decomposing presentation tier, API gateway, core backend microservices, data persistence stores, and external integrations.",
+    "data_flow": "Focus specifically on the end-to-end data lifecycle: client requests, API routing, synchronous gRPC/REST service calls, database reads/writes, and cache retrieval pathways.",
+    "security_auth": "Focus exclusively on security boundaries: authentication mechanisms (JWT/OAuth2/OIDC), API gateway token validation, session authorization, secrets storage, and protected domain services.",
+    "event_driven": "Emphasize asynchronous messaging patterns: Kafka / RabbitMQ / Redis event streams, pub/sub topics, background worker consumers, event-driven triggers, and failure retry queues.",
+    "database_storage": "Focus on data layer topology: primary SQL tables, relational foreign keys, distributed NoSQL stores, Redis session caching, connection pooling, and replication/sharding strategies.",
+    "devops_cloud": "Structure the diagram around cloud infrastructure: Docker containers, Kubernetes pods, ingress controllers, load balancers, CDN caching, and production cloud deployment tiers.",
+    "ai_rag": "Focus on AI system components: user input orchestrator, embedding models, vector database retrieval, LLM inference agent workflows, tool calls, and streaming output."
+}
+
 class QwenEngine:
     def __init__(self):
         self.ollama_base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
@@ -85,13 +95,7 @@ class QwenEngine:
         self.modelscope_key = os.getenv("MODELSCOPE_API_KEY", "")
         self.modelscope_model = os.getenv("MODELSCOPE_MODEL", "Qwen/Qwen3.8-27B")
 
-    def stream_architecture_analysis(self, codebase_data: Dict[str, Any], provider: str = "modelscope", custom_instructions: str = ""):
-        """Streams reasoning tokens in real-time, then yields complete architecture JSON."""
-        import time
-        start_time = time.time()
-        load_dotenv(override=True)
-        modelscope_key = os.getenv("MODELSCOPE_API_KEY", self.modelscope_key)
-
+    def _build_context(self, codebase_data: Dict[str, Any], perspective: str = "overview", custom_instructions: str = "") -> str:
         context_parts = []
         if "repo_url" in codebase_data:
             context_parts.append(f"Repository: {codebase_data['repo_url']}")
@@ -106,11 +110,24 @@ class QwenEngine:
         for fpath, content in codebase_data.get("key_files", {}).items():
             context_parts.append(f"\n[FILE: {fpath}]\n{content}\n")
 
+        # Add perspective directive
+        if perspective in PERSPECTIVE_DIRECTIVES:
+            context_parts.append(f"\n--- DIAGRAM PERSPECTIVE GOAL ---\n{PERSPECTIVE_DIRECTIVES[perspective]}")
+
         if custom_instructions and custom_instructions.strip():
             context_parts.append(f"\n--- USER ARCHITECTURAL FOCUS & CUSTOM REQUIREMENTS ---\n{custom_instructions.strip()}\nEnsure you prioritize and explicitly reflect these specific requirements, focus areas, and components in the diagram layers, nodes, data flows, and recommendations.")
             
         full_codebase_prompt = "\n".join(context_parts)
-        user_message = f"Please analyze this codebase and generate the complete visual architecture graph JSON according to the instructions:\n\n{full_codebase_prompt}"
+        return f"Please analyze this codebase and generate the complete visual architecture graph JSON according to the instructions:\n\n{full_codebase_prompt}"
+
+    def stream_architecture_analysis(self, codebase_data: Dict[str, Any], provider: str = "modelscope", perspective: str = "overview", custom_instructions: str = ""):
+        """Streams reasoning tokens in real-time, then yields complete architecture JSON."""
+        import time
+        start_time = time.time()
+        load_dotenv(override=True)
+        modelscope_key = os.getenv("MODELSCOPE_API_KEY", self.modelscope_key)
+
+        user_message = self._build_context(codebase_data, perspective, custom_instructions)
 
         if provider == "ollama":
             client = OpenAI(base_url=self.ollama_base, api_key="ollama")
@@ -127,6 +144,7 @@ class QwenEngine:
                     {"role": "user", "content": user_message}
                 ],
                 temperature=0.2,
+                max_tokens=2500,
                 stream=True
             )
 
@@ -146,9 +164,10 @@ class QwenEngine:
                         full_content += content_chunk
                         yield f"data: {json.dumps({'type': 'content', 'chunk': content_chunk})}\n\n"
 
-            # Parse the final JSON
+            # Parse the final JSON from either content or reasoning stream
             duration_ms = int((time.time() - start_time) * 1000)
-            parsed_json = self._parse_json_response(full_content)
+            json_source = full_content if "{" in full_content else (full_reasoning if "{" in full_reasoning else full_content)
+            parsed_json = self._parse_json_response(json_source)
 
             # Fallback reasoning if model didn't stream explicit reasoning
             if not full_reasoning:
@@ -168,32 +187,12 @@ class QwenEngine:
             print(f"[QwenEngine] Streaming failed: {e}")
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
 
-    def analyze_architecture(self, codebase_data: Dict[str, Any], provider: str = "modelscope", custom_instructions: str = "") -> Dict[str, Any]:
+    def analyze_architecture(self, codebase_data: Dict[str, Any], provider: str = "modelscope", perspective: str = "overview", custom_instructions: str = "") -> Dict[str, Any]:
         """Calls Qwen to deduce architecture from codebase metadata and returns graph + token metrics."""
         import time
         start_time = time.time()
         
-        # Prepare codebase context string
-        context_parts = []
-        if "repo_url" in codebase_data:
-            context_parts.append(f"Repository: {codebase_data['repo_url']}")
-        if "root_name" in codebase_data:
-            context_parts.append(f"Project Name: {codebase_data['root_name']}")
-        
-        context_parts.append(f"Languages: {json.dumps(codebase_data.get('languages', {}))}")
-        context_parts.append("\n--- FILE STRUCTURE ---")
-        context_parts.append("\n".join(codebase_data.get("file_tree", [])[:80]))
-        
-        context_parts.append("\n--- KEY MANIFESTS & ENTRY FILES ---")
-        for fpath, content in codebase_data.get("key_files", {}).items():
-            context_parts.append(f"\n[FILE: {fpath}]\n{content}\n")
-
-        if custom_instructions and custom_instructions.strip():
-            context_parts.append(f"\n--- USER ARCHITECTURAL FOCUS & CUSTOM REQUIREMENTS ---\n{custom_instructions.strip()}\nEnsure you prioritize and explicitly reflect these specific requirements, focus areas, and components in the diagram layers, nodes, data flows, and recommendations.")
-            
-        full_codebase_prompt = "\n".join(context_parts)
-        user_message = f"Please analyze this codebase and generate the complete visual architecture graph JSON according to the instructions:\n\n{full_codebase_prompt}"
-
+        user_message = self._build_context(codebase_data, perspective, custom_instructions)
         raw_response, usage_metrics = self._call_llm(user_message, provider=provider)
         duration_ms = int((time.time() - start_time) * 1000)
         usage_metrics["duration_ms"] = duration_ms

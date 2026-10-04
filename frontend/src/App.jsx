@@ -321,6 +321,7 @@ export default function App() {
           source_type,
           source_value,
           provider,
+          perspective: selectedPerspective,
           custom_instructions: customInstructions
         })
       });
@@ -332,67 +333,94 @@ export default function App() {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
+      let buffer = '';
       let streamedReasoning = '';
-      let finalArch = null;
-      let finalUsage = null;
+      let completedSuccessfully = false;
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const text = decoder.decode(value, { stream: true });
-        const lines = text.split('\n');
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        // Keep the trailing incomplete line in buffer
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.type === 'reasoning') {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+          const jsonPayload = trimmed.slice(6).trim();
+          if (!jsonPayload) continue;
+
+          try {
+            const data = JSON.parse(jsonPayload);
+            if (data.type === 'reasoning') {
+              setCurrentStep(2); // 2. Reasoning
+              streamedReasoning += data.chunk;
+              setUsage(prev => ({
+                ...prev,
+                reasoning: streamedReasoning
+              }));
+            } else if (data.type === 'content') {
+              setCurrentStep(3); // 3. Synthesizing diagram
+              if (!streamedReasoning || streamedReasoning.length < 50) {
                 streamedReasoning += data.chunk;
                 setUsage(prev => ({
                   ...prev,
                   reasoning: streamedReasoning
                 }));
-              } else if (data.type === 'content') {
-                setCurrentStep(3); // 3. Synthesizing diagram
-                if (!streamedReasoning) {
-                  streamedReasoning += data.chunk;
-                  setUsage(prev => ({
-                    ...prev,
-                    reasoning: streamedReasoning
-                  }));
-                }
-              } else if (data.type === 'complete') {
-                setCurrentStep(4); // 4. Done
-                finalArch = data.architecture;
-                finalUsage = data.usage;
-                setArchitecture(data.architecture);
-                setUsage(data.usage);
-                setShowReasoning(false);
-
-                // Save to history
-                saveToHistory({
-                  id: `run-${Date.now()}`,
-                  title: data.architecture.system_title || displayName,
-                  time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                  source_type,
-                  custom_instructions: customInstructions,
-                  architecture: data.architecture,
-                  usage: data.usage
-                });
-
-                // Auto-sync to Miro if toggle is active!
-                if (autoSyncMiro) {
-                  executeMiroSync(data.architecture);
-                }
-              } else if (data.type === 'error') {
-                throw new Error(data.error);
               }
-            } catch (pErr) {
-              // Ignore partial JSON chunks in stream
+            } else if (data.type === 'complete') {
+              completedSuccessfully = true;
+              setCurrentStep(4); // 4. Done
+              setArchitecture(data.architecture);
+              setUsage(data.usage);
+              setShowReasoning(false);
+
+              // Trigger confetti celebration
+              confetti({
+                particleCount: 50,
+                spread: 60,
+                origin: { y: 0.8 }
+              });
+
+              // Save to history
+              saveToHistory({
+                id: `run-${Date.now()}`,
+                title: data.architecture.system_title || displayName,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                source_type,
+                custom_instructions: customInstructions,
+                architecture: data.architecture,
+                usage: data.usage
+              });
+
+              // Auto-sync to Miro if toggle is active!
+              if (autoSyncMiro) {
+                executeMiroSync(data.architecture);
+              }
+            } else if (data.type === 'error') {
+              throw new Error(data.error);
             }
+          } catch (pErr) {
+            console.warn('SSE chunk buffering issue:', pErr);
           }
         }
+      }
+
+      // Check remaining buffer if any
+      if (buffer.trim().startsWith('data: ')) {
+        try {
+          const data = JSON.parse(buffer.trim().slice(6).trim());
+          if (data.type === 'complete') {
+            completedSuccessfully = true;
+            setCurrentStep(4);
+            setArchitecture(data.architecture);
+            setUsage(data.usage);
+            setShowReasoning(false);
+            if (autoSyncMiro) executeMiroSync(data.architecture);
+          }
+        } catch (e) {}
       }
     } catch (err) {
       setError(err.message || 'An error occurred during codebase analysis.');

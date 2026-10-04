@@ -29,6 +29,7 @@ class AnalyzeRequest(BaseModel):
     source_type: str  # "github", "local", "prompt"
     source_value: str
     provider: Optional[str] = "auto" # "ollama", "modelscope", "auto"
+    perspective: Optional[str] = "overview" # predefined perspective id
     custom_instructions: Optional[str] = "" # user focus / customization instructions
 
 class SyncMiroRequest(BaseModel):
@@ -133,6 +134,7 @@ def analyze_codebase(req: AnalyzeRequest):
         analysis_result = qwen_engine.analyze_architecture(
             codebase_data, 
             provider=req.provider or "modelscope",
+            perspective=req.perspective or "overview",
             custom_instructions=req.custom_instructions or ""
         )
         return {
@@ -164,6 +166,7 @@ def analyze_codebase_stream(req: AnalyzeRequest):
             qwen_engine.stream_architecture_analysis(
                 codebase_data, 
                 provider=req.provider or "modelscope",
+                perspective=req.perspective or "overview",
                 custom_instructions=req.custom_instructions or ""
             ),
             media_type="text/event-stream"
