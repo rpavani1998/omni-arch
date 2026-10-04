@@ -91,11 +91,16 @@ SAMPLE_REPOS = [
     }
 ]
 
-@app.get("/api/health")
+from fastapi import APIRouter
+
+router = APIRouter()
+
+@router.get("/")
+@router.get("/health")
 def health():
     return {"status": "ok", "app": "QwenArch"}
 
-@app.get("/api/board-info")
+@router.get("/board-info")
 def get_board_info():
     try:
         info = miro_client.get_board_info()
@@ -110,11 +115,11 @@ def get_board_info():
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-@app.get("/api/sample-repos")
+@router.get("/sample-repos")
 def get_sample_repos():
     return SAMPLE_REPOS
 
-@app.post("/api/analyze")
+@router.post("/analyze")
 def analyze_codebase(req: AnalyzeRequest):
     try:
         if req.source_type == "github":
@@ -145,7 +150,7 @@ def analyze_codebase(req: AnalyzeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/analyze-stream")
+@router.post("/analyze-stream")
 def analyze_codebase_stream(req: AnalyzeRequest):
     try:
         if req.source_type == "github":
@@ -174,7 +179,7 @@ def analyze_codebase_stream(req: AnalyzeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/sync-miro")
+@router.post("/sync-miro")
 def sync_to_miro(req: SyncMiroRequest):
     try:
         res = miro_client.sync_architecture_diagram(
@@ -189,6 +194,11 @@ def sync_to_miro(req: SyncMiroRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Include router for both /api prefix and root level to handle direct or rewritten invocations
+app.include_router(router, prefix="")
+app.include_router(router, prefix="/api")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
