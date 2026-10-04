@@ -124,25 +124,40 @@ class QwenEngine:
         full_codebase_prompt = "\n".join(context_parts)
         return f"Please analyze this codebase and generate the complete visual architecture graph JSON according to the instructions:\n\n{full_codebase_prompt}"
 
-    def _get_client_and_model(self, provider: str = "modelscope", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None):
+    def _get_client_and_model(self, provider: str = "custom", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None):
         load_dotenv(override=True)
-        provider_clean = (provider or "modelscope").lower()
+        provider_clean = (provider or "custom").lower()
         
+        # Universal environment variable resolution with provider-specific fallbacks
+        default_base_url = os.getenv("AI_BASE_URL") or os.getenv("OPENAI_BASE_URL") or os.getenv("CUSTOM_BASE_URL") or os.getenv("MODELSCOPE_BASE_URL", "https://api.openai.com/v1")
+        default_api_key = os.getenv("AI_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("CUSTOM_API_KEY") or os.getenv("MODELSCOPE_API_KEY", "")
+        default_model = os.getenv("AI_MODEL_NAME") or os.getenv("OPENAI_MODEL") or os.getenv("CUSTOM_MODEL") or os.getenv("MODELSCOPE_MODEL", "gpt-4o")
+
         if provider_clean == "ollama":
-            endpoint = base_url or os.getenv("OLLAMA_BASE_URL", self.ollama_base)
+            endpoint = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
             key = api_key or "ollama"
-            model = model_name or os.getenv("OLLAMA_MODEL", self.ollama_model)
+            model = model_name or os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
             provider_label = f"Ollama ({model})"
-        elif provider_clean in ["custom", "openai", "openrouter", "deepseek", "groq", "vllm"]:
-            endpoint = base_url or os.getenv("CUSTOM_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1"
-            key = api_key or os.getenv("CUSTOM_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
-            model = model_name or os.getenv("CUSTOM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o"
-            provider_label = f"Custom ({model})"
-        else: # modelscope / default
-            endpoint = base_url or os.getenv("MODELSCOPE_BASE_URL", self.modelscope_base)
-            key = api_key or os.getenv("MODELSCOPE_API_KEY", self.modelscope_key)
-            model = model_name or os.getenv("MODELSCOPE_MODEL", self.modelscope_model)
+        elif provider_clean == "modelscope":
+            endpoint = base_url or os.getenv("MODELSCOPE_BASE_URL", "https://api-inference.modelscope.ai/v1")
+            key = api_key or os.getenv("MODELSCOPE_API_KEY") or default_api_key
+            model = model_name or os.getenv("MODELSCOPE_MODEL", "Qwen/Qwen3.8-27B")
             provider_label = f"ModelScope ({model})"
+        elif provider_clean == "deepseek":
+            endpoint = base_url or os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+            key = api_key or os.getenv("DEEPSEEK_API_KEY") or default_api_key
+            model = model_name or os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+            provider_label = f"DeepSeek ({model})"
+        elif provider_clean in ["openrouter", "groq", "openai", "custom"]:
+            endpoint = base_url or default_base_url
+            key = api_key or default_api_key
+            model = model_name or default_model
+            provider_label = f"AI Provider ({model})"
+        else:
+            endpoint = base_url or default_base_url
+            key = api_key or default_api_key
+            model = model_name or default_model
+            provider_label = f"Custom Model ({model})"
             
         client = OpenAI(base_url=endpoint, api_key=key or "dummy")
         return client, model, provider_label
@@ -210,7 +225,7 @@ class QwenEngine:
             print(f"[QwenEngine] Streaming failed: {e}")
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
 
-    def analyze_architecture(self, codebase_data: Dict[str, Any], provider: str = "modelscope", perspective: str = "overview", custom_instructions: str = "", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None) -> Dict[str, Any]:
+    def analyze_architecture(self, codebase_data: Dict[str, Any], provider: str = "custom", perspective: str = "overview", custom_instructions: str = "", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None) -> Dict[str, Any]:
         """Calls LLM to deduce architecture from codebase metadata and returns graph + token metrics."""
         import time
         start_time = time.time()
@@ -226,6 +241,11 @@ class QwenEngine:
             "architecture": parsed_json,
             "usage": usage_metrics
         }
+
+    def generate_architecture(self, codebase_data: Dict[str, Any], provider: str = "custom", perspective: str = "overview", custom_instructions: str = "", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None) -> Dict[str, Any]:
+        """Convenience method returning the architecture graph dictionary directly."""
+        res = self.analyze_architecture(codebase_data, provider, perspective, custom_instructions, api_key, base_url, model_name)
+        return res.get("architecture", self._get_fallback())
 
     def _call_llm_direct(self, client: OpenAI, target_model: str, provider_label: str, user_content: str):
         try:

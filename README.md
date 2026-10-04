@@ -58,8 +58,10 @@ jobs:
           miro-board-id: ${{ secrets.MIRO_BOARD_ID }}
           perspective: 'overview'
           custom-instructions: 'Highlight public API endpoints and database trust boundaries'
-          ai-provider: 'modelscope'
-          ai-api-key: ${{ secrets.MODELSCOPE_API_KEY }}
+          ai-provider: 'custom'
+          ai-base-url: 'https://api.openai.com/v1'
+          ai-model-name: 'gpt-4o'
+          ai-api-key: ${{ secrets.AI_API_KEY }}
 ```
 
 ### Action Inputs
@@ -69,9 +71,27 @@ jobs:
 | `miro-access-token` | Miro OAuth Access Token with `boards:write` permissions | **Yes** | - |
 | `miro-board-id` | Target Miro Board ID (e.g., `uXjVEekRCSA=`) | **Yes** | - |
 | `perspective` | Architectural perspective (`overview`, `data_flow`, `database_storage`, `devops_pipeline`, `security_auth`, `async_workers`, `observability`, `ai_rag`) | No | `overview` |
-| `custom-instructions`| Extra comments or directives (e.g., 'detail Redis cache TTL') | No | `""` |
-| `ai-provider` | Model provider: `modelscope`, `openai`, `ollama`, or `custom` | No | `modelscope` |
-| `ai-api-key` | Provider API Key | No | `""` |
+| `custom-instructions`| Extra comments or team directives (e.g., 'detail Redis cache TTL') | No | `""` |
+| `ai-provider` | Provider type: `custom`, `openai`, `deepseek`, `modelscope`, `openrouter`, or `ollama` | No | `custom` |
+| `ai-api-key` | API Key for your chosen LLM provider | No | `""` |
+| `ai-base-url` | OpenAI-compatible Base URL endpoint | No | `https://api.openai.com/v1` |
+| `ai-model-name` | Model name (e.g. `gpt-4o`, `deepseek-chat`, `Qwen/Qwen3.8-27B`, `claude-3-5-sonnet`) | No | `gpt-4o` |
+
+---
+
+## Universal Model Compatibility (Plug & Play Any LLM)
+
+OmniArch works with **any OpenAI-compatible API endpoint**. You only need to supply your Endpoint Base URL, API Key, and Model Name:
+
+| Provider | Base URL (`AI_BASE_URL`) | Recommended Model (`AI_MODEL_NAME`) |
+| :--- | :--- | :--- |
+| **OpenAI** | `https://api.openai.com/v1` | `gpt-4o`, `gpt-4o-mini`, `o1` |
+| **DeepSeek** | `https://api.deepseek.com/v1` | `deepseek-chat`, `deepseek-reasoner` |
+| **ModelScope / Qwen** | `https://api-inference.modelscope.ai/v1` | `Qwen/Qwen3.8-27B`, `Qwen/Qwen2.5-Coder-32B` |
+| **OpenRouter / Claude** | `https://openrouter.ai/api/v1` | `anthropic/claude-3.5-sonnet`, `meta-llama/llama-3.3-70b-instruct` |
+| **Groq** | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+| **Local Ollama** | `http://localhost:11434/v1` | `qwen2.5-coder:7b`, `llama3.2`, `deepseek-r1` |
+| **Self-Hosted vLLM** | `http://your-server:8000/v1` | Custom hosted model ID |
 
 ---
 
@@ -103,7 +123,9 @@ Visit `http://localhost:3000` to open the application.
 2. Under **Project Settings > Environment Variables**, configure:
    - `MIRO_ACCESS_TOKEN` : Your Miro OAuth token (`eyJ...`)
    - `MIRO_BOARD_ID` : Your target Miro Board ID (e.g. `uXjVEekRCSA=`)
-   - `MODELSCOPE_API_KEY` : Your model inference key
+   - `AI_API_KEY` : Your model provider API key
+   - `AI_BASE_URL` : Provider base URL (e.g. `https://api.openai.com/v1` or `https://api.deepseek.com/v1`)
+   - `AI_MODEL_NAME` : Model name (e.g. `gpt-4o` or `deepseek-chat`)
 3. Click **Deploy**.
 
 ---
