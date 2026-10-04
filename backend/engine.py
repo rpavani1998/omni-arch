@@ -90,7 +90,7 @@ PERSPECTIVE_DIRECTIVES = {
     "devops_cloud": "Map the continuous integration and deployment lifecycle: Git repository triggers, automated lint/test stages, Docker containerization, artifact registry packaging, cloud infrastructure deployment, and environment promotion."
 }
 
-class QwenEngine:
+class ArchitectureEngine:
     def __init__(self):
         self.ollama_base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
         self.ollama_model = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
@@ -233,7 +233,7 @@ class QwenEngine:
             yield f"data: {json.dumps({'type': 'complete', 'architecture': parsed_json, 'usage': usage})}\n\n"
 
         except Exception as e:
-            print(f"[QwenEngine] Streaming failed: {e}")
+            print(f"[ArchitectureEngine] Streaming failed: {e}")
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
 
     def analyze_architecture(self, codebase_data: Dict[str, Any], provider: str = "custom", perspective: str = "overview", custom_instructions: str = "", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None) -> Dict[str, Any]:
@@ -329,7 +329,7 @@ Output STRICT JSON only with the following schema:
 
     def _call_llm_direct(self, client: OpenAI, target_model: str, provider_label: str, user_content: str):
         try:
-            print(f"[QwenEngine] Invoking {provider_label} ({target_model})...")
+            print(f"[ArchitectureEngine] Invoking {provider_label} ({target_model})...")
             resp = client.chat.completions.create(
                 model=target_model,
                 messages=[
@@ -362,7 +362,7 @@ Output STRICT JSON only with the following schema:
             }
             return content if content.strip() else reasoning_text, usage
         except Exception as e:
-            print(f"[QwenEngine] Direct LLM invocation failed: {e}")
+            print(f"[ArchitectureEngine] Direct LLM invocation failed: {e}")
             raise e
 
         usage = {
@@ -543,5 +543,6 @@ Output STRICT JSON only with the following schema:
         }
 
 # Universal Engine Aliases for multi-model architecture synthesis
-ArchitectureEngine = QwenEngine
-OmniEngine = QwenEngine
+QwenEngine = ArchitectureEngine
+OmniEngine = ArchitectureEngine
+OmniArchEngine = ArchitectureEngine

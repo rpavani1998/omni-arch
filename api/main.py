@@ -42,7 +42,6 @@ app.add_middleware(
 )
 
 engine = ArchitectureEngine()
-qwen_engine = engine
 miro_client = MiroClient()
 
 class AnalyzeRequest(BaseModel):
