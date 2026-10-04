@@ -6,6 +6,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TYPE_STYLES = {
+    "header": {
+        "shape": "round_rectangle",
+        "fillColor": "#f8fafc",   # Slate 50
+        "borderColor": "#cbd5e1", # Slate 300
+        "icon": "📌"
+    },
     "frontend": {
         "shape": "round_rectangle",
         "fillColor": "#e0f2fe",  # Sky 100
@@ -25,13 +31,13 @@ TYPE_STYLES = {
         "icon": "⚙️"
     },
     "database": {
-        "shape": "can",
+        "shape": "round_rectangle",
         "fillColor": "#fef3c7",  # Amber 100
         "borderColor": "#d97706", # Amber 600
         "icon": "🗄️"
     },
     "cache": {
-        "shape": "can",
+        "shape": "round_rectangle",
         "fillColor": "#ffe4e6",  # Rose 100
         "borderColor": "#e11d48", # Rose 600
         "icon": "⚡"
@@ -43,10 +49,10 @@ TYPE_STYLES = {
         "icon": "📬"
     },
     "external": {
-        "shape": "cloud",
+        "shape": "round_rectangle",
         "fillColor": "#f1f5f9",  # Slate 100
-        "borderColor": "#475569", # Slate 600
-        "icon": "🔌"
+        "borderColor": "#64748b", # Slate 500
+        "icon": "☁️"
     }
 }
 
@@ -366,12 +372,12 @@ class MiroClient:
             layer_title = layer.get("name", f"Tier {col_idx + 1}")
             shapes_to_create.append({
                 "node_id": f"__header_{lid}",
-                "content": f"<p><strong style='font-size:13px;color:#475569;'>TIER {col_idx + 1}: {layer_title.upper()}</strong></p>",
+                "content": f"<p><strong style='font-size:12px;color:#334155;'>TIER {col_idx + 1}: {layer_title.upper()}</strong></p>",
                 "x": current_x,
                 "y": header_y,
-                "shape_type": "external",
+                "shape_type": "header",
                 "width": card_width,
-                "height": 48,
+                "height": 42,
                 "is_header": True
             })
             
@@ -435,7 +441,7 @@ class MiroClient:
                         created_nodes_map[node_id] = resp["id"]
                     all_created_items.append(resp)
 
-        # 4. Draw Connectors with Smart Orthogonal Elbow Routing & Clean Captions
+        # 4. Draw Connectors with Smart Routing & Concise Captions
         connectors_to_create = []
         for conn in connections:
             from_id = conn.get("from")
@@ -447,27 +453,29 @@ class MiroClient:
                 protocol = (conn.get("protocol") or "").strip()
                 label = (conn.get("label") or "").strip()
                 
-                # Format clean, succinct caption (under 24 chars) to prevent line crowding
-                if protocol and not label:
-                    caption = protocol
-                elif label and not protocol:
+                # Filter redundant language/internal prefixes
+                clean_proto = protocol
+                for generic in ["Python API", "In-Memory", "Internal API", "Method Call", "Local Call"]:
+                    if clean_proto.lower() == generic.lower():
+                        clean_proto = ""
+                        break
+
+                if label and not clean_proto:
                     caption = label
-                elif protocol and label:
-                    caption = protocol if len(protocol) <= 16 else label
+                elif clean_proto and not label:
+                    caption = clean_proto
+                elif clean_proto and label:
+                    caption = clean_proto if len(clean_proto) <= 16 else label
                 else:
                     caption = ""
 
-                if len(caption) > 24:
-                    caption = caption[:22] + ".."
+                if len(caption) > 20:
+                    caption = caption[:18] + ".."
 
                 src_coord = node_coords_map.get(from_id, {"col_idx": 0, "row_idx": 0, "x": 0, "y": 0})
                 dst_coord = node_coords_map.get(to_id, {"col_idx": 0, "row_idx": 0, "x": 0, "y": 0})
 
-                # Determine intelligent shape (elbow for cross-tier, curved for loops/same tier)
-                if src_coord["col_idx"] != dst_coord["col_idx"]:
-                    conn_shape = "elbow"
-                else:
-                    conn_shape = "curved"
+                conn_shape = "elbow" if src_coord["col_idx"] != dst_coord["col_idx"] else "curved"
 
                 # Smart edge colors by protocol
                 proto_lower = protocol.lower() + " " + label.lower()
