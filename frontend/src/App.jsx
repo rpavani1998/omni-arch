@@ -26,7 +26,13 @@ import {
   Moon,
   Sliders,
   Target,
-  Presentation
+  Presentation,
+  Settings,
+  Key,
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  Save
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import ArchitectureGraph from './components/ArchitectureGraph';
@@ -159,6 +165,35 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
 
+  const [customSettings, setCustomSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('qwenarch_custom_settings');
+      return saved ? JSON.parse(saved) : {
+        miroAccessToken: '',
+        miroBoardId: '',
+        aiProvider: 'modelscope',
+        aiApiKey: '',
+        aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
+        aiModelName: 'Qwen/Qwen3.8-27B'
+      };
+    } catch (e) {
+      return {
+        miroAccessToken: '',
+        miroBoardId: '',
+        aiProvider: 'modelscope',
+        aiApiKey: '',
+        aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
+        aiModelName: 'Qwen/Qwen3.8-27B'
+      };
+    }
+  });
+
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showMiroToken, setShowMiroToken] = useState(false);
+  const [testingMiro, setTestingMiro] = useState(false);
+  const [miroTestResult, setMiroTestResult] = useState(null);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('qwenarch_theme', theme);
@@ -172,6 +207,31 @@ export default function App() {
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
+
+  const handleSaveSettings = (newSettings) => {
+    setCustomSettings(newSettings);
+    try {
+      localStorage.setItem('qwenarch_custom_settings', JSON.stringify(newSettings));
+    } catch (e) {}
+    fetchBoardInfo(newSettings.miroAccessToken, newSettings.miroBoardId);
+  };
+
+  const handleResetSettings = () => {
+    const defaults = {
+      miroAccessToken: '',
+      miroBoardId: '',
+      aiProvider: 'modelscope',
+      aiApiKey: '',
+      aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
+      aiModelName: 'Qwen/Qwen3.8-27B'
+    };
+    setCustomSettings(defaults);
+    try {
+      localStorage.removeItem('qwenarch_custom_settings');
+    } catch (e) {}
+    setMiroTestResult(null);
+    fetchBoardInfo('', '');
   };
 
   const loadHistory = () => {
@@ -195,15 +255,53 @@ export default function App() {
     } catch (e) {}
   };
 
-  const fetchBoardInfo = async () => {
+  const fetchBoardInfo = async (customToken, customBoard) => {
     try {
-      const res = await fetch('/api/board-info');
+      const token = customToken !== undefined ? customToken : customSettings.miroAccessToken;
+      const board = customBoard !== undefined ? customBoard : customSettings.miroBoardId;
+      
+      const hasCustom = Boolean(token || board);
+      const res = await fetch('/api/board-info', {
+        method: hasCustom ? 'POST' : 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        body: hasCustom ? JSON.stringify({ access_token: token || undefined, board_id: board || undefined }) : undefined
+      });
       const data = await res.json();
       if (data.success) {
         setBoardInfo(data);
+        return { success: true, data };
+      } else {
+        return { success: false, error: data.error };
       }
     } catch (err) {
       console.error('Failed to fetch board info:', err);
+      return { success: false, error: err.message };
+    }
+  };
+
+  const handleTestMiroConnection = async () => {
+    setTestingMiro(true);
+    setMiroTestResult(null);
+    try {
+      const res = await fetchBoardInfo(customSettings.miroAccessToken, customSettings.miroBoardId);
+      if (res.success) {
+        setMiroTestResult({
+          success: true,
+          message: `Connected to "${res.data.name}" (${res.data.team || 'Personal'})`
+        });
+      } else {
+        setMiroTestResult({
+          success: false,
+          message: res.error || 'Connection failed. Verify access token and board ID permissions.'
+        });
+      }
+    } catch (e) {
+      setMiroTestResult({
+        success: false,
+        message: e.message
+      });
+    } finally {
+      setTestingMiro(false);
     }
   };
 
@@ -256,7 +354,9 @@ export default function App() {
         body: JSON.stringify({
           architecture: targetArch,
           offset_x: -250,
-          offset_y: -120
+          offset_y: -120,
+          access_token: customSettings.miroAccessToken || undefined,
+          board_id: customSettings.miroBoardId || undefined
         })
       });
 
@@ -314,13 +414,17 @@ export default function App() {
 
       setCurrentStep(2); // 2. Reasoning
 
+      const effectiveProvider = customSettings.aiProvider || provider;
       const res = await fetch('/api/analyze-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           source_type,
           source_value,
-          provider,
+          provider: effectiveProvider,
+          api_key: customSettings.aiApiKey || undefined,
+          base_url: customSettings.aiBaseUrl || undefined,
+          model_name: customSettings.aiModelName || undefined,
           perspective: selectedPerspective,
           custom_instructions: customInstructions
         })
@@ -433,7 +537,10 @@ export default function App() {
           body: JSON.stringify({
             source_type,
             source_value,
-            provider,
+            provider: effectiveProvider,
+            api_key: customSettings.aiApiKey || undefined,
+            base_url: customSettings.aiBaseUrl || undefined,
+            model_name: customSettings.aiModelName || undefined,
             perspective: selectedPerspective,
             custom_instructions: customInstructions
           })
@@ -483,6 +590,19 @@ export default function App() {
             <Presentation size={15} />
             <span>Pitch Deck</span>
           </a>
+
+          {/* Custom Credentials & Settings Modal Trigger */}
+          <button
+            className="settings-nav-btn"
+            onClick={() => setShowSettingsModal(true)}
+            title="Configure Custom Credentials (Miro, ModelScope, Ollama, OpenAI, DeepSeek, etc.)"
+          >
+            <Settings size={15} />
+            <span>Settings & Keys</span>
+            {(customSettings.miroAccessToken || customSettings.aiApiKey || customSettings.aiProvider === 'custom') && (
+              <span className="settings-active-dot" title="Custom credentials active" />
+            )}
+          </button>
 
           {/* Light / Dark Mode Toggle */}
           <button 
@@ -954,6 +1074,279 @@ export default function App() {
           )}
         </section>
       </main>
+
+      {/* Custom Credentials & Settings Modal */}
+      {showSettingsModal && (
+        <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
+          <div className="modal-card settings-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title-group">
+                <Settings size={18} className="modal-icon" />
+                <div>
+                  <h3>Settings & Custom Credentials</h3>
+                  <p>Configure custom Miro board access and universal AI model inference endpoints</p>
+                </div>
+              </div>
+              <button 
+                className="modal-close-btn" 
+                onClick={() => setShowSettingsModal(false)}
+                aria-label="Close Settings"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body settings-body">
+              {/* Section 1: Miro Credentials */}
+              <div className="settings-section">
+                <div className="settings-section-title">
+                  <div className="section-badge miro-badge">Miro</div>
+                  <h4>Miro Workspace Credentials</h4>
+                </div>
+                <p className="settings-desc">
+                  Provide your personal Miro OAuth2 / Developer Access Token and Board ID to sync directly to your own boards. Leave blank to use server defaults.
+                </p>
+
+                <div className="settings-grid">
+                  <div className="settings-field">
+                    <label>Miro Access Token</label>
+                    <div className="input-with-action">
+                      <input
+                        type={showMiroToken ? 'text' : 'password'}
+                        placeholder="eyJhbGciOi..."
+                        value={customSettings.miroAccessToken}
+                        onChange={(e) => setCustomSettings({ ...customSettings, miroAccessToken: e.target.value })}
+                        className="settings-input"
+                      />
+                      <button
+                        type="button"
+                        className="input-eye-btn"
+                        onClick={() => setShowMiroToken(!showMiroToken)}
+                        title={showMiroToken ? 'Hide token' : 'Show token'}
+                      >
+                        {showMiroToken ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="settings-field">
+                    <label>Miro Board ID</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. uXjVN5oQe0Y="
+                      value={customSettings.miroBoardId}
+                      onChange={(e) => setCustomSettings({ ...customSettings, miroBoardId: e.target.value })}
+                      className="settings-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="miro-test-bar">
+                  <button
+                    type="button"
+                    className="test-btn"
+                    onClick={handleTestMiroConnection}
+                    disabled={testingMiro}
+                  >
+                    {testingMiro ? <RefreshCw size={14} className="spin" /> : <ShieldCheck size={14} />}
+                    <span>{testingMiro ? 'Testing Miro...' : 'Verify Miro Credentials'}</span>
+                  </button>
+
+                  {miroTestResult && (
+                    <div className={`test-result-badge ${miroTestResult.success ? 'success' : 'error'}`}>
+                      {miroTestResult.success ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                      <span>{miroTestResult.message}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Section 2: Universal AI Model / Inference Provider */}
+              <div className="settings-section">
+                <div className="settings-section-title">
+                  <div className="section-badge ai-badge">AI Engine</div>
+                  <h4>Universal Model & Inference Provider</h4>
+                </div>
+                <p className="settings-desc">
+                  Connect to ModelScope, local Ollama, DeepSeek, OpenAI, OpenRouter, Groq, or any OpenAI-compatible endpoint.
+                </p>
+
+                {/* Quick Presets */}
+                <div className="presets-wrapper">
+                  <label className="field-label-small">Quick Model Presets</label>
+                  <div className="preset-chips">
+                    <button
+                      type="button"
+                      className="preset-chip"
+                      onClick={() => setCustomSettings({
+                        ...customSettings,
+                        aiProvider: 'modelscope',
+                        aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
+                        aiModelName: 'Qwen/Qwen3.8-27B'
+                      })}
+                    >
+                      Qwen 3.8 27B (ModelScope)
+                    </button>
+                    <button
+                      type="button"
+                      className="preset-chip"
+                      onClick={() => setCustomSettings({
+                        ...customSettings,
+                        aiProvider: 'modelscope',
+                        aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
+                        aiModelName: 'Qwen/Qwen2.5-Coder-32B-Instruct'
+                      })}
+                    >
+                      Qwen 2.5 Coder 32B
+                    </button>
+                    <button
+                      type="button"
+                      className="preset-chip"
+                      onClick={() => setCustomSettings({
+                        ...customSettings,
+                        aiProvider: 'custom',
+                        aiBaseUrl: 'https://api.deepseek.com/v1',
+                        aiModelName: 'deepseek-chat'
+                      })}
+                    >
+                      DeepSeek V3
+                    </button>
+                    <button
+                      type="button"
+                      className="preset-chip"
+                      onClick={() => setCustomSettings({
+                        ...customSettings,
+                        aiProvider: 'custom',
+                        aiBaseUrl: 'https://api.openai.com/v1',
+                        aiModelName: 'gpt-4o'
+                      })}
+                    >
+                      OpenAI GPT-4o
+                    </button>
+                    <button
+                      type="button"
+                      className="preset-chip"
+                      onClick={() => setCustomSettings({
+                        ...customSettings,
+                        aiProvider: 'custom',
+                        aiBaseUrl: 'https://openrouter.ai/api/v1',
+                        aiModelName: 'qwen/qwen-2.5-coder-32b-instruct'
+                      })}
+                    >
+                      OpenRouter (Any LLM)
+                    </button>
+                    <button
+                      type="button"
+                      className="preset-chip"
+                      onClick={() => setCustomSettings({
+                        ...customSettings,
+                        aiProvider: 'custom',
+                        aiBaseUrl: 'https://api.groq.com/openai/v1',
+                        aiModelName: 'llama-3.3-70b-versatile'
+                      })}
+                    >
+                      Groq (Ultra-Fast)
+                    </button>
+                    <button
+                      type="button"
+                      className="preset-chip"
+                      onClick={() => setCustomSettings({
+                        ...customSettings,
+                        aiProvider: 'ollama',
+                        aiBaseUrl: 'http://localhost:11434/v1',
+                        aiModelName: 'qwen2.5-coder:7b'
+                      })}
+                    >
+                      Local Ollama
+                    </button>
+                  </div>
+                </div>
+
+                <div className="settings-grid">
+                  <div className="settings-field">
+                    <label>Provider Mode</label>
+                    <select
+                      value={customSettings.aiProvider}
+                      onChange={(e) => setCustomSettings({ ...customSettings, aiProvider: e.target.value })}
+                      className="settings-input"
+                    >
+                      <option value="modelscope">ModelScope (Cloud Qwen)</option>
+                      <option value="ollama">Local Ollama</option>
+                      <option value="custom">Custom (OpenAI-compatible / DeepSeek / OpenRouter / Groq / vLLM)</option>
+                    </select>
+                  </div>
+
+                  <div className="settings-field">
+                    <label>Model ID / Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Qwen/Qwen3.8-27B or gpt-4o"
+                      value={customSettings.aiModelName}
+                      onChange={(e) => setCustomSettings({ ...customSettings, aiModelName: e.target.value })}
+                      className="settings-input"
+                    />
+                  </div>
+
+                  <div className="settings-field full-width">
+                    <label>Base URL Endpoint</label>
+                    <input
+                      type="text"
+                      placeholder="https://api-inference.modelscope.ai/v1"
+                      value={customSettings.aiBaseUrl}
+                      onChange={(e) => setCustomSettings({ ...customSettings, aiBaseUrl: e.target.value })}
+                      className="settings-input"
+                    />
+                  </div>
+
+                  <div className="settings-field full-width">
+                    <label>API Key / Bearer Token</label>
+                    <div className="input-with-action">
+                      <input
+                        type={showApiKey ? 'text' : 'password'}
+                        placeholder="Leave blank to use server environment default"
+                        value={customSettings.aiApiKey}
+                        onChange={(e) => setCustomSettings({ ...customSettings, aiApiKey: e.target.value })}
+                        className="settings-input"
+                      />
+                      <button
+                        type="button"
+                        className="input-eye-btn"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        title={showApiKey ? 'Hide API key' : 'Show API key'}
+                      >
+                        {showApiKey ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="reset-btn"
+                onClick={handleResetSettings}
+              >
+                <RotateCcw size={14} />
+                <span>Reset to Defaults</span>
+              </button>
+
+              <button
+                type="button"
+                className="save-btn"
+                onClick={() => {
+                  handleSaveSettings(customSettings);
+                  setShowSettingsModal(false);
+                }}
+              >
+                <Save size={14} />
+                <span>Save & Apply Settings</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

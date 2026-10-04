@@ -120,25 +120,39 @@ class QwenEngine:
         full_codebase_prompt = "\n".join(context_parts)
         return f"Please analyze this codebase and generate the complete visual architecture graph JSON according to the instructions:\n\n{full_codebase_prompt}"
 
-    def stream_architecture_analysis(self, codebase_data: Dict[str, Any], provider: str = "modelscope", perspective: str = "overview", custom_instructions: str = ""):
+    def _get_client_and_model(self, provider: str = "modelscope", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None):
+        load_dotenv(override=True)
+        provider_clean = (provider or "modelscope").lower()
+        
+        if provider_clean == "ollama":
+            endpoint = base_url or os.getenv("OLLAMA_BASE_URL", self.ollama_base)
+            key = api_key or "ollama"
+            model = model_name or os.getenv("OLLAMA_MODEL", self.ollama_model)
+            provider_label = f"Ollama ({model})"
+        elif provider_clean in ["custom", "openai", "openrouter", "deepseek", "groq", "vllm"]:
+            endpoint = base_url or os.getenv("CUSTOM_BASE_URL") or os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1"
+            key = api_key or os.getenv("CUSTOM_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
+            model = model_name or os.getenv("CUSTOM_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-4o"
+            provider_label = f"Custom ({model})"
+        else: # modelscope / default
+            endpoint = base_url or os.getenv("MODELSCOPE_BASE_URL", self.modelscope_base)
+            key = api_key or os.getenv("MODELSCOPE_API_KEY", self.modelscope_key)
+            model = model_name or os.getenv("MODELSCOPE_MODEL", self.modelscope_model)
+            provider_label = f"ModelScope ({model})"
+            
+        client = OpenAI(base_url=endpoint, api_key=key or "dummy")
+        return client, model, provider_label
+
+    def stream_architecture_analysis(self, codebase_data: Dict[str, Any], provider: str = "modelscope", perspective: str = "overview", custom_instructions: str = "", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None):
         """Streams reasoning tokens in real-time, then yields complete architecture JSON."""
         import time
         start_time = time.time()
-        load_dotenv(override=True)
-        modelscope_key = os.getenv("MODELSCOPE_API_KEY", self.modelscope_key)
-
+        client, target_model, provider_label = self._get_client_and_model(provider, api_key, base_url, model_name)
         user_message = self._build_context(codebase_data, perspective, custom_instructions)
-
-        if provider == "ollama":
-            client = OpenAI(base_url=self.ollama_base, api_key="ollama")
-            model_name = self.ollama_model
-        else:
-            client = OpenAI(base_url=self.modelscope_base, api_key=modelscope_key)
-            model_name = self.modelscope_model
 
         try:
             stream = client.chat.completions.create(
-                model=model_name,
+                model=target_model,
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_message}
@@ -181,8 +195,8 @@ class QwenEngine:
             usage = {
                 "total_tokens": len((full_content + full_reasoning).split()) * 2,
                 "duration_ms": duration_ms,
-                "model": model_name,
-                "provider": "ModelScope Cloud" if provider != "ollama" else "Local Ollama",
+                "model": target_model,
+                "provider": provider_label,
                 "reasoning": full_reasoning
             }
 
@@ -192,13 +206,14 @@ class QwenEngine:
             print(f"[QwenEngine] Streaming failed: {e}")
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
 
-    def analyze_architecture(self, codebase_data: Dict[str, Any], provider: str = "modelscope", perspective: str = "overview", custom_instructions: str = "") -> Dict[str, Any]:
-        """Calls Qwen to deduce architecture from codebase metadata and returns graph + token metrics."""
+    def analyze_architecture(self, codebase_data: Dict[str, Any], provider: str = "modelscope", perspective: str = "overview", custom_instructions: str = "", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None) -> Dict[str, Any]:
+        """Calls LLM to deduce architecture from codebase metadata and returns graph + token metrics."""
         import time
         start_time = time.time()
+        client, target_model, provider_label = self._get_client_and_model(provider, api_key, base_url, model_name)
         
         user_message = self._build_context(codebase_data, perspective, custom_instructions)
-        raw_response, usage_metrics = self._call_llm(user_message, provider=provider)
+        raw_response, usage_metrics = self._call_llm_direct(client, target_model, provider_label, user_message)
         duration_ms = int((time.time() - start_time) * 1000)
         usage_metrics["duration_ms"] = duration_ms
 
@@ -208,75 +223,43 @@ class QwenEngine:
             "usage": usage_metrics
         }
 
-    def _call_llm(self, user_content: str, provider: str = "modelscope"):
-        load_dotenv(override=True)
-        modelscope_key = os.getenv("MODELSCOPE_API_KEY", self.modelscope_key)
-        reasoning_text = ""
+    def _call_llm_direct(self, client: OpenAI, target_model: str, provider_label: str, user_content: str):
+        try:
+            print(f"[QwenEngine] Invoking {provider_label} ({target_model})...")
+            resp = client.chat.completions.create(
+                model=target_model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": user_content}
+                ],
+                temperature=0.2,
+                max_tokens=4096
+            )
+            msg = resp.choices[0].message
+            content = msg.content or ""
+            reasoning_text = getattr(msg, "reasoning_content", "") or ""
+            
+            if not reasoning_text and "<think>" in content:
+                think_match = re.search(r"<think>(.*?)</think>", content, re.DOTALL)
+                if think_match:
+                    reasoning_text = think_match.group(1).strip()
+                    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
 
-        if provider.startswith("modelscope") or (provider == "auto" and modelscope_key):
-            try:
-                target_model = self.modelscope_model
-                print(f"[QwenEngine] Invoking ModelScope ({target_model})...")
-                client = OpenAI(base_url=self.modelscope_base, api_key=modelscope_key)
-                resp = client.chat.completions.create(
-                    model=target_model,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": user_content}
-                    ],
-                    temperature=0.2,
-                    max_tokens=4096
-                )
-                msg = resp.choices[0].message
-                content = msg.content or ""
-                reasoning_text = getattr(msg, "reasoning_content", "") or ""
-                
-                # Check for <think>...</think> tags if reasoning_content was in body
-                if not reasoning_text and "<think>" in content:
-                    think_match = re.search(r"<think>(.*?)</think>", content, re.DOTALL)
-                    if think_match:
-                        reasoning_text = think_match.group(1).strip()
-                        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+            if not reasoning_text:
+                reasoning_text = f"1. Ingress & Routing Analysis: Evaluated API gateways and entrypoints.\n2. Domain Decomposition: Identified core microservices/modules.\n3. Data Flow & State: Mapped persistence tiers and storage.\n4. Scalability & Resilience: Assessed coupling and bottlenecks."
 
-                if not reasoning_text:
-                    reasoning_text = f"1. Ingress & Routing Analysis: Evaluated API gateways and entrypoints.\n2. Domain Decomposition: Identified core microservices/modules.\n3. Data Flow & State: Mapped persistence tiers and storage.\n4. Scalability & Resilience: Assessed coupling and bottlenecks."
-
-                usage = {
-                    "prompt_tokens": getattr(resp.usage, "prompt_tokens", 0) if resp.usage else 0,
-                    "completion_tokens": getattr(resp.usage, "completion_tokens", 0) if resp.usage else 0,
-                    "total_tokens": getattr(resp.usage, "total_tokens", 0) if resp.usage else 0,
-                    "model": self.modelscope_model,
-                    "provider": "ModelScope Cloud",
-                    "reasoning": reasoning_text
-                }
-                print(f"[QwenEngine] ModelScope response: {usage['total_tokens']} tokens, reasoning: {len(reasoning_text)} chars")
-                return content if content.strip() else reasoning_text, usage
-            except Exception as e:
-                print(f"[QwenEngine] ModelScope call error ({e}), falling back to Ollama...")
-
-        # Fallback to local Ollama
-        print(f"[QwenEngine] Invoking local Ollama ({self.ollama_model})...")
-        client = OpenAI(base_url=self.ollama_base, api_key="ollama")
-        resp = client.chat.completions.create(
-            model=self.ollama_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_content}
-            ],
-            temperature=0.2,
-            max_tokens=4096
-        )
-        msg = resp.choices[0].message
-        content = msg.content or ""
-        reasoning_text = getattr(msg, "reasoning_content", "") or ""
-        if not reasoning_text and "<think>" in content:
-            think_match = re.search(r"<think>(.*?)</think>", content, re.DOTALL)
-            if think_match:
-                reasoning_text = think_match.group(1).strip()
-                content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-
-        if not reasoning_text:
-            reasoning_text = f"1. Ingress & Routing Analysis: Evaluated API gateways and entrypoints.\n2. Domain Decomposition: Identified core microservices/modules.\n3. Data Flow & State: Mapped persistence tiers and storage.\n4. Scalability & Resilience: Assessed coupling and bottlenecks."
+            usage = {
+                "prompt_tokens": getattr(resp.usage, "prompt_tokens", 0) if resp.usage else 0,
+                "completion_tokens": getattr(resp.usage, "completion_tokens", 0) if resp.usage else 0,
+                "total_tokens": getattr(resp.usage, "total_tokens", 0) if resp.usage else 0,
+                "model": target_model,
+                "provider": provider_label,
+                "reasoning": reasoning_text
+            }
+            return content if content.strip() else reasoning_text, usage
+        except Exception as e:
+            print(f"[QwenEngine] Direct LLM invocation failed: {e}")
+            raise e
 
         usage = {
             "prompt_tokens": getattr(resp.usage, "prompt_tokens", 0) if resp.usage else 0,

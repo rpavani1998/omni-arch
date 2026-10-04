@@ -38,14 +38,25 @@ miro_client = MiroClient()
 class AnalyzeRequest(BaseModel):
     source_type: str  # "github", "local", "prompt"
     source_value: str
-    provider: Optional[str] = "auto" # "ollama", "modelscope", "auto"
+    provider: Optional[str] = "modelscope" # "modelscope", "ollama", "custom", "openai", "openrouter", "deepseek"
     perspective: Optional[str] = "overview" # predefined perspective id
     custom_instructions: Optional[str] = "" # user focus / customization instructions
+    # Custom AI Credentials
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    model_name: Optional[str] = None
 
 class SyncMiroRequest(BaseModel):
     architecture: Dict[str, Any]
     offset_x: Optional[float] = -300
     offset_y: Optional[float] = -150
+    # Custom Miro Credentials
+    access_token: Optional[str] = None
+    board_id: Optional[str] = None
+
+class BoardInfoRequest(BaseModel):
+    access_token: Optional[str] = None
+    board_id: Optional[str] = None
 
 SAMPLE_REPOS = [
     {
@@ -111,9 +122,13 @@ def health():
     return {"status": "ok", "app": "QwenArch"}
 
 @router.get("/board-info")
-def get_board_info():
+@router.post("/board-info")
+def get_board_info(access_token: Optional[str] = None, board_id: Optional[str] = None, req: Optional[BoardInfoRequest] = None):
     try:
-        info = miro_client.get_board_info()
+        token = (req.access_token if req else None) or access_token
+        b_id = (req.board_id if req else None) or board_id
+        client = MiroClient(access_token=token, board_id=b_id) if (token or b_id) else miro_client
+        info = client.get_board_info()
         return {
             "success": True,
             "board_id": info.get("id"),
@@ -150,7 +165,10 @@ def analyze_codebase(req: AnalyzeRequest):
             codebase_data, 
             provider=req.provider or "modelscope",
             perspective=req.perspective or "overview",
-            custom_instructions=req.custom_instructions or ""
+            custom_instructions=req.custom_instructions or "",
+            api_key=req.api_key,
+            base_url=req.base_url,
+            model_name=req.model_name
         )
         return {
             "success": True,
@@ -182,7 +200,10 @@ def analyze_codebase_stream(req: AnalyzeRequest):
                 codebase_data, 
                 provider=req.provider or "modelscope",
                 perspective=req.perspective or "overview",
-                custom_instructions=req.custom_instructions or ""
+                custom_instructions=req.custom_instructions or "",
+                api_key=req.api_key,
+                base_url=req.base_url,
+                model_name=req.model_name
             ),
             media_type="text/event-stream"
         )
@@ -192,7 +213,8 @@ def analyze_codebase_stream(req: AnalyzeRequest):
 @router.post("/sync-miro")
 def sync_to_miro(req: SyncMiroRequest):
     try:
-        res = miro_client.sync_architecture_diagram(
+        client = MiroClient(access_token=req.access_token, board_id=req.board_id) if (req.access_token or req.board_id) else miro_client
+        res = client.sync_architecture_diagram(
             arch_data=req.architecture,
             start_x=req.offset_x or -300,
             start_y=req.offset_y or -150
@@ -204,19 +226,45 @@ def sync_to_miro(req: SyncMiroRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, HTMLResponse
+from pathlib import Path
+
+API_DIR = Path(__file__).resolve().parent
+DIST_DIR = API_DIR / "dist" if (API_DIR / "dist").exists() else API_DIR.parent / "frontend" / "dist"
+
 # Include router for root, /api, and /api/index.py to handle all Vercel proxying patterns
-app.include_router(router, prefix="")
 app.include_router(router, prefix="/api")
 app.include_router(router, prefix="/api/index.py")
+app.include_router(router, prefix="")
 
-@app.get("/")
-@app.get("/api")
-def root_status():
-    return {"status": "ok", "app": "QwenArch"}
+# Mount static assets if dist exists
+if (DIST_DIR / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(DIST_DIR / "assets")), name="assets")
+
+if (DIST_DIR / "slides").exists():
+    app.mount("/slides", StaticFiles(directory=str(DIST_DIR / "slides")), name="slides")
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
+    fav = DIST_DIR / "favicon.ico"
+    if fav.exists():
+        return FileResponse(str(fav))
     return HTMLResponse(content="", status_code=204)
+
+@app.get("/slides.html", include_in_schema=False)
+def get_slides():
+    slides = DIST_DIR / "slides.html"
+    if slides.exists():
+        return FileResponse(str(slides))
+    return HTMLResponse("<h1>Slides not found</h1>", status_code=404)
+
+@app.get("/", include_in_schema=False)
+def serve_index():
+    index = DIST_DIR / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return {"status": "ok", "app": "QwenArch"}
 
 if __name__ == "__main__":
     import uvicorn
