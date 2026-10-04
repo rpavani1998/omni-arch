@@ -10,49 +10,41 @@ TYPE_STYLES = {
         "shape": "round_rectangle",
         "fillColor": "#f8fafc",   # Slate 50
         "borderColor": "#cbd5e1", # Slate 300
-        "icon": "📌"
     },
     "frontend": {
         "shape": "round_rectangle",
         "fillColor": "#e0f2fe",  # Sky 100
         "borderColor": "#0284c7", # Sky 600
-        "icon": "🌐"
     },
     "gateway": {
         "shape": "round_rectangle",
         "fillColor": "#f3e8ff",  # Purple 100
         "borderColor": "#9333ea", # Purple 600
-        "icon": "🛡️"
     },
     "service": {
         "shape": "round_rectangle",
         "fillColor": "#ecfdf5",  # Emerald 100
         "borderColor": "#059669", # Emerald 600
-        "icon": "⚙️"
     },
     "database": {
         "shape": "round_rectangle",
         "fillColor": "#fef3c7",  # Amber 100
         "borderColor": "#d97706", # Amber 600
-        "icon": "🗄️"
     },
     "cache": {
         "shape": "round_rectangle",
         "fillColor": "#ffe4e6",  # Rose 100
         "borderColor": "#e11d48", # Rose 600
-        "icon": "⚡"
     },
     "queue": {
         "shape": "round_rectangle",
         "fillColor": "#e0e7ff",  # Indigo 100
         "borderColor": "#4f46e5", # Indigo 600
-        "icon": "📬"
     },
     "external": {
         "shape": "round_rectangle",
         "fillColor": "#f1f5f9",  # Slate 100
         "borderColor": "#64748b", # Slate 500
-        "icon": "☁️"
     }
 }
 
@@ -339,12 +331,12 @@ class MiroClient:
             print(f"[MiroClient] Error creating frame: {e}")
 
         # 2. Place Architecture Summary Card on left with safe clearance
-        summary_content = f"<p><strong style='font-size:16px;color:#0f172a;'>📊 {arch_data.get('system_title', 'System Architecture')}</strong></p><br/>" \
+        summary_content = f"<p><strong>{arch_data.get('system_title', 'System Architecture')}</strong></p><br/>" \
                           f"<p><b>Perspective:</b> {persp_info['title']}</p>" \
                           f"<p><b>Style:</b> {arch_data.get('architecture_style', 'N/A')}</p>" \
                           f"<p><b>Stack:</b> {', '.join(arch_data.get('tech_stack', []))}</p><br/>" \
-                          f"<p style='font-size:12px;color:#334155;'><b>Overview:</b> {arch_data.get('summary', '')}</p><br/>" \
-                          f"<p style='font-size:12px;color:#1e293b;'><b>Key Strengths:</b><br/>• " + "<br/>• ".join(insights.get("strengths", ["Modular microservice design", "Decoupled data boundaries"])[:2]) + "</p>"
+                          f"<p><b>Overview:</b> {arch_data.get('summary', '')}</p><br/>" \
+                          f"<p><b>Key Strengths:</b><br/>• " + "<br/>• ".join(insights.get("strengths", ["Modular microservice design", "Decoupled data boundaries"])[:2]) + "</p>"
 
         try:
             summary_sticky = self.create_sticky_note(
@@ -376,7 +368,7 @@ class MiroClient:
             layer_title = layer.get("name", f"Tier {col_idx + 1}")
             shapes_to_create.append({
                 "node_id": f"__header_{lid}",
-                "content": f"<p><strong style='font-size:12px;color:#334155;'>TIER {col_idx + 1}: {layer_title.upper()}</strong></p>",
+                "content": f"<p><strong>TIER {col_idx + 1} • {layer_title.upper()}</strong></p>",
                 "x": current_x,
                 "y": header_y,
                 "shape_type": "header",
@@ -388,18 +380,16 @@ class MiroClient:
             for row_idx, node in enumerate(layer_nodes):
                 current_y = base_y + (row_idx * row_height) - ((total_in_col - 1) * row_height / 2)
                 node_type = node.get("type", "service")
-                style_cfg = TYPE_STYLES.get(node_type, TYPE_STYLES["service"])
-                icon = style_cfg.get("icon", "⚙️")
                 
                 tech_str = node.get('tech', '')
                 desc_str = node.get('description', '')
                 
-                html_content = f"<p><strong style='font-size:13px;color:#0f172a;'>{icon} {node['name']}</strong></p>"
+                html_content = f"<p><strong>{node['name']}</strong></p>"
                 if tech_str:
-                    html_content += f"<p><em style='font-size:11px;color:#475569;'>{tech_str}</em></p>"
+                    html_content += f"<p><em>{tech_str}</em></p>"
                 if desc_str:
                     clean_desc = desc_str if len(desc_str) <= 75 else desc_str[:72] + "..."
-                    html_content += f"<p style='font-size:11px;color:#334155;'>{clean_desc}</p>"
+                    html_content += f"<p>{clean_desc}</p>"
 
                 node_coords_map[node["id"]] = {
                     "x": current_x,

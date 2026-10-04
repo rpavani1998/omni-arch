@@ -32,7 +32,10 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
-  Save
+  Save,
+  Activity,
+  Box,
+  Database
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import ArchitectureGraph from './components/ArchitectureGraph';
@@ -151,42 +154,50 @@ const DIAGRAM_PERSPECTIVES = [
 const SDLC_ADDON_PROMPTS = [
   {
     id: 'addon_caching',
-    label: '⚡ Multi-Tier Caching & CDN',
+    label: 'Multi-Tier Caching & CDN',
+    icon: 'zap',
     prompt: 'Include multi-level caching strategies (Redis in-memory caching, CDN edge caching, and query result caches) with TTL policies.'
   },
   {
     id: 'addon_security',
-    label: '🔒 Strict RBAC & Zero-Trust',
+    label: 'Strict RBAC & Zero-Trust',
+    icon: 'shield',
     prompt: 'Enforce strict RBAC role authorization, granular API permission scopes, encrypted tokens, and least-privilege security boundaries.'
   },
   {
     id: 'addon_resilience',
-    label: '🔁 Circuit Breaker & Retries',
+    label: 'Circuit Breaker & Retries',
+    icon: 'refresh',
     prompt: 'Detail failure resilience: circuit breakers, exponential backoff retries, fallback responses, and dead-letter queues (DLQ).'
   },
   {
     id: 'addon_observability',
-    label: '📊 OpenTelemetry & Metrics',
+    label: 'OpenTelemetry & Metrics',
+    icon: 'activity',
     prompt: 'Include OpenTelemetry distributed trace IDs, Prometheus metrics collection, and centralized structured log aggregation.'
   },
   {
     id: 'addon_testing',
-    label: '🧪 Test Mocks & E2E Points',
+    label: 'Test Mocks & E2E Points',
+    icon: 'test',
     prompt: 'Specify automated testing boundaries: unit test mock interfaces, integration test fixtures, and end-to-end API assertion checkpoints.'
   },
   {
     id: 'addon_docker',
-    label: '📦 Containers & Port Mappings',
+    label: 'Containers & Port Mappings',
+    icon: 'box',
     prompt: 'Detail Docker container boundaries, exposed network port bindings, environment variable injection, and volume mounts.'
   },
   {
     id: 'addon_multitenancy',
-    label: '🏢 Multi-Tenant Data Isolation',
+    label: 'Multi-Tenant Data Isolation',
+    icon: 'layers',
     prompt: 'Highlight multi-tenant isolation: tenant ID propagation, row-level security (RLS), and isolated database schema boundaries.'
   },
   {
     id: 'addon_transactions',
-    label: '💾 ACID & Read/Write Splitting',
+    label: 'ACID & Read/Write Splitting',
+    icon: 'database',
     prompt: 'Detail transactional consistency: ACID transaction scopes, primary write vs read-replica pools, and database connection pooling.'
   }
 ];
@@ -895,7 +906,7 @@ export default function App() {
                 
                 {/* SDLC Add-On Directives Section */}
                 <div className="addon-section-header">
-                  <span className="addon-section-label">⚡ Quick Add-On Directives (Click to toggle & append):</span>
+                  <span className="addon-section-label">Quick Add-On Directives (Click to toggle & append):</span>
                 </div>
 
                 <div className="quick-focus-chips">
@@ -923,7 +934,15 @@ export default function App() {
                           }
                         }}
                       >
-                        {addon.label}
+                        {addon.icon === 'zap' && <Zap size={11} />}
+                        {addon.icon === 'shield' && <ShieldCheck size={11} />}
+                        {addon.icon === 'refresh' && <RotateCcw size={11} />}
+                        {addon.icon === 'activity' && <Activity size={11} />}
+                        {addon.icon === 'test' && <CheckCircle2 size={11} />}
+                        {addon.icon === 'box' && <Box size={11} />}
+                        {addon.icon === 'layers' && <Layers size={11} />}
+                        {addon.icon === 'database' && <Database size={11} />}
+                        <span>{addon.label}</span>
                       </button>
                     );
                   })}
@@ -1055,7 +1074,7 @@ export default function App() {
                 <div className="error-message-col">
                   <span className="error-text">{error}</span>
                   <div className="error-hint-box">
-                    <p>💡 If API credits are exhausted or rate limited, switch to your own custom API key or model:</p>
+                    <p>If API credits are exhausted or rate limited, switch to your own custom API key or model:</p>
                     <button
                       type="button"
                       className="error-settings-cta"
