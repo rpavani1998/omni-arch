@@ -95,8 +95,11 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
+@router.get("")
+@router.get("/")
 @router.get("/health")
 @router.get("/api")
+@router.get("/api/health")
 def health():
     return {"status": "ok", "app": "QwenArch"}
 
