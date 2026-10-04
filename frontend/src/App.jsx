@@ -422,6 +422,33 @@ export default function App() {
           }
         } catch (e) {}
       }
+
+      // If stream ended without complete payload, fetch via standard POST
+      if (!completedSuccessfully) {
+        console.log('Stream ended before complete payload. Fetching direct analysis...');
+        setCurrentStep(3);
+        const directRes = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source_type,
+            source_value,
+            provider,
+            perspective: selectedPerspective,
+            custom_instructions: customInstructions
+          })
+        });
+        if (directRes.ok) {
+          const directData = await directRes.json();
+          if (directData.success && directData.architecture) {
+            setArchitecture(directData.architecture);
+            setUsage(directData.usage || {});
+            setShowReasoning(false);
+            setCurrentStep(4);
+            if (autoSyncMiro) executeMiroSync(directData.architecture);
+          }
+        }
+      }
     } catch (err) {
       setError(err.message || 'An error occurred during codebase analysis.');
     } finally {

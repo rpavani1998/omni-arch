@@ -70,7 +70,7 @@ Your JSON output must have the following exact schema:
 }
 
 Rules:
-1. Output ONLY the raw valid JSON object starting with { and ending with }. Do NOT write markdown prose or long monologue before the JSON.
+1. Output ONLY the raw valid JSON object starting with { and ending with }. Keep internal reasoning/monologue extremely brief (under 3 sentences) so the complete JSON is generated quickly without hitting streaming timeouts.
 2. Adapt intelligently to any architecture: for web/microservices use web tiers; for ML/research pipelines map notebooks/dashboards to presentation, CLI/SLURM to gateway, models/training/eval to services, datasets/checkpoints/scoresheets to data, and HPC/GPUs/frameworks to external.
 3. Every node in "connections" MUST reference a valid "id" present in "nodes".
 4. Group all nodes into the appropriate layer_id from the 5 standard layers.
@@ -164,10 +164,15 @@ class QwenEngine:
                         full_content += content_chunk
                         yield f"data: {json.dumps({'type': 'content', 'chunk': content_chunk})}\n\n"
 
-            # Parse the final JSON from either content or reasoning stream
+            # Parse the final JSON: prioritize content stream first, then reasoning
             duration_ms = int((time.time() - start_time) * 1000)
-            combined_text = full_content + "\n" + full_reasoning
-            parsed_json = self._parse_json_response(combined_text)
+            parsed_json = self._parse_json_response(full_content)
+            
+            # If content didn't parse a custom diagram, try reasoning text
+            if parsed_json.get("nodes", [])[0].get("id") == "client_ui" and full_reasoning and "{" in full_reasoning:
+                alt_parsed = self._parse_json_response(full_reasoning)
+                if alt_parsed and alt_parsed.get("nodes", [])[0].get("id") != "client_ui":
+                    parsed_json = alt_parsed
 
             # Fallback reasoning if model didn't stream explicit reasoning
             if not full_reasoning:
@@ -245,7 +250,6 @@ class QwenEngine:
                     "reasoning": reasoning_text
                 }
                 print(f"[QwenEngine] ModelScope response: {usage['total_tokens']} tokens, reasoning: {len(reasoning_text)} chars")
-                # Return both content and reasoning so parser has full access
                 return content if content.strip() else reasoning_text, usage
             except Exception as e:
                 print(f"[QwenEngine] ModelScope call error ({e}), falling back to Ollama...")
@@ -286,55 +290,81 @@ class QwenEngine:
 
     def _parse_json_response(self, text: str) -> Dict[str, Any]:
         """Cleans, extracts, and repairs JSON safely from model response."""
+        if not text or not text.strip():
+            return self._get_fallback()
+
         cleaned = text.strip()
         
-        # Remove markdown codeblock syntax if present
+        # Extract from markdown block if present
         if "```" in cleaned:
-            match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+            match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", cleaned)
             if match:
                 cleaned = match.group(1)
             else:
-                cleaned = re.sub(r"```(?:json)?", "", cleaned)
-                cleaned = cleaned.replace("```", "").strip()
+                cleaned = re.sub(r"```(?:json)?", "", cleaned).replace("```", "").strip()
 
         # Find first { and last }
         start_idx = cleaned.find("{")
         end_idx = cleaned.rfind("}")
         
+        candidate_json = None
         if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
             json_str = cleaned[start_idx:end_idx + 1]
             try:
-                parsed = json.loads(json_str)
-                if isinstance(parsed, dict) and "nodes" in parsed and len(parsed["nodes"]) > 0:
-                    return parsed
+                candidate_json = json.loads(json_str)
             except Exception:
-                pass
+                # Try cleaning trailing commas
+                try:
+                    cleaned_commas = re.sub(r",\s*([\]}])", r"\1", json_str)
+                    candidate_json = json.loads(cleaned_commas)
+                except Exception:
+                    pass
 
-            # Try cleaning trailing commas
-            cleaned_commas = re.sub(r",\s*([\]}])", r"\1", json_str)
-            try:
-                parsed = json.loads(cleaned_commas)
-                if isinstance(parsed, dict) and "nodes" in parsed:
-                    return parsed
-            except Exception:
-                pass
-
-        # If start_idx exists but end_idx is cut off, attempt auto-closing JSON
-        if start_idx != -1:
+        # If start_idx exists but end_idx is truncated, attempt auto-closing
+        if not candidate_json and start_idx != -1:
             partial_json = cleaned[start_idx:]
-            # Attempt to balance brackets
             open_braces = partial_json.count("{") - partial_json.count("}")
             open_brackets = partial_json.count("[") - partial_json.count("]")
             repaired = partial_json.rstrip().rstrip(",") + ("]" * max(0, open_brackets)) + ("}" * max(0, open_braces))
             repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
             try:
-                parsed = json.loads(repaired)
-                if isinstance(parsed, dict) and "nodes" in parsed and len(parsed["nodes"]) > 0:
-                    return parsed
+                candidate_json = json.loads(repaired)
             except Exception:
                 pass
 
-        # Return fallback structure only as last resort
+        # Normalize parsed architecture
+        if isinstance(candidate_json, dict):
+            # If wrapped under "architecture" or "project"
+            if "nodes" not in candidate_json:
+                if "architecture" in candidate_json and isinstance(candidate_json["architecture"], dict) and "nodes" in candidate_json["architecture"]:
+                    base_info = {k: v for k, v in candidate_json.items() if k != "architecture"}
+                    candidate_json = {**base_info, **candidate_json["architecture"]}
+                elif "components" in candidate_json:
+                    candidate_json["nodes"] = candidate_json.pop("components")
+
+            if "nodes" in candidate_json and len(candidate_json["nodes"]) > 0:
+                # Ensure layers exist
+                if "layers" not in candidate_json or not candidate_json["layers"]:
+                    candidate_json["layers"] = [
+                        {"id": "layer_presentation", "name": "Presentation & Clients", "order": 1},
+                        {"id": "layer_gateway", "name": "API & Ingress Gateway", "order": 2},
+                        {"id": "layer_services", "name": "Core Application Services", "order": 3},
+                        {"id": "layer_data", "name": "Persistence & Caching", "order": 4},
+                        {"id": "layer_external", "name": "External & Third-Party APIs", "order": 5}
+                    ]
+                if "system_title" not in candidate_json:
+                    candidate_json["system_title"] = candidate_json.get("project", "Analyzed Architecture")
+                if "insights" not in candidate_json:
+                    candidate_json["insights"] = {
+                        "strengths": ["Modular service structure", "Decoupled domain layers"],
+                        "bottlenecks": ["High database I/O on large batches"],
+                        "recommendations": ["Introduce caching and async task queues"]
+                    }
+                return candidate_json
+
+        return self._get_fallback()
+
+    def _get_fallback(self) -> Dict[str, Any]:
         return {
             "system_title": "Analyzed Codebase Architecture",
             "summary": "Architecture extracted from scanned source files.",
