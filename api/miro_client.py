@@ -109,6 +109,8 @@ class MiroClient:
         shape: str = "curved"
     ) -> Optional[Dict[str, Any]]:
         url = f"{self.base_url}/boards/{self.board_id}/connectors"
+        clean_caption = (caption or "").strip()
+        
         payload = {
             "startItem": {
                 "id": start_id
@@ -119,24 +121,34 @@ class MiroClient:
             "shape": shape,
             "style": {
                 "strokeColor": stroke_color,
-                "strokeWidth": "2.0",
-                "endStrokeCap": "stealth"
+                "strokeWidth": "2.0"
             }
         }
-        if caption:
-            payload["captions"] = [{"content": caption}]
+        if clean_caption:
+            payload["captions"] = [
+                {
+                    "content": clean_caption,
+                    "position": 0.5
+                }
+            ]
 
         try:
             resp = requests.post(url, headers=self.headers, json=payload)
             if resp.status_code in [200, 201]:
                 return resp.json()
             else:
-                # If custom style failed, fallback to minimal standard payload
+                # If custom style failed, fallback to minimal payload while preserving caption
                 fallback_payload = {
                     "startItem": {"id": start_id},
                     "endItem": {"id": end_id},
                     "shape": "curved"
                 }
+                if clean_caption:
+                    fallback_payload["captions"] = [
+                        {
+                            "content": clean_caption
+                        }
+                    ]
                 f_resp = requests.post(url, headers=self.headers, json=fallback_payload)
                 if f_resp.status_code in [200, 201]:
                     return f_resp.json()
@@ -388,9 +400,13 @@ class MiroClient:
             if from_id in created_nodes_map and to_id in created_nodes_map:
                 start_miro_id = created_nodes_map[from_id]
                 end_miro_id = created_nodes_map[to_id]
-                caption = conn.get("protocol", "")
-                if conn.get("label"):
-                    caption = f"{caption}: {conn.get('label')}" if caption else conn.get("label")
+                protocol = conn.get("protocol", "")
+                label = conn.get("label", "")
+                desc = conn.get("description", "")
+                if protocol and label and protocol != label:
+                    caption = f"{protocol} • {label}"
+                else:
+                    caption = label or protocol or desc or ""
 
                 src_coord = node_coords_map.get(from_id, {"col_idx": 0, "row_idx": 0, "x": 0, "y": 0})
                 dst_coord = node_coords_map.get(to_id, {"col_idx": 0, "row_idx": 0, "x": 0, "y": 0})
