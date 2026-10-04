@@ -7,24 +7,18 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 try:
+    from backend.analyzer import CodebaseAnalyzer
+    from backend.engine import ArchitectureEngine
+    from backend.miro_client import MiroClient
+    from backend.security import SecurityAndTelemetryMiddleware
+    from backend.oauth import oauth_manager, installation_store
+except ImportError:
     from analyzer import CodebaseAnalyzer
     from engine import ArchitectureEngine
     from miro_client import MiroClient
     from security import SecurityAndTelemetryMiddleware
     from oauth import oauth_manager, installation_store
-except ImportError:
-    try:
-        from api.analyzer import CodebaseAnalyzer
-        from api.engine import ArchitectureEngine
-        from api.miro_client import MiroClient
-        from api.security import SecurityAndTelemetryMiddleware
-        from api.oauth import oauth_manager, installation_store
-    except ImportError:
-        from backend.analyzer import CodebaseAnalyzer
-        from backend.engine import ArchitectureEngine
-        from backend.miro_client import MiroClient
-        from backend.security import SecurityAndTelemetryMiddleware
-        from backend.oauth import oauth_manager, installation_store
+
 
 load_dotenv()
 

@@ -9,6 +9,7 @@ for d in [api_dir, root_dir]:
         sys.path.insert(0, d)
 
 try:
-    from api.main import app
+    from backend.main import app
 except ImportError:
     from main import app
+
