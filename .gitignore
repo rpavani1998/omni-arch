@@ -29,3 +29,7 @@ venv/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local Drafts
+MEDIUM_ARTICLE.md
+article*.md
