@@ -1,0 +1,124 @@
+name: 'OmniArch AI - Visual Architecture Generator'
+description: 'Automatically analyzes codebases with Qwen and syncs 2D architecture diagrams to Miro boards.'
+author: 'OmniArch Team'
+branding:
+  icon: 'layout'
+  color: 'blue'
+
+inputs:
+  github-token:
+    description: 'GitHub Token for repository reading and PR comments (e.g. secrets.GITHUB_TOKEN)'
+    required: false
+    default: '${{ github.token }}'
+  miro-access-token:
+    description: 'Miro REST API Access Token with boards:write permissions'
+    required: true
+  miro-board-id:
+    description: 'Target Miro Board ID to synchronize diagrams into'
+    required: true
+  perspective:
+    description: 'SDLC Perspective: overview, data_flow, database_storage, devops_pipeline, security_auth, async_workers, observability, ai_rag'
+    required: false
+    default: 'overview'
+  custom-instructions:
+    description: 'Optional custom architectural focus or team instructions'
+    required: false
+    default: ''
+  ai-provider:
+    description: 'AI LLM Provider: modelscope, openai, ollama, or custom'
+    required: false
+    default: 'modelscope'
+  ai-api-key:
+    description: 'API Key for LLM provider (optional for default cloud / BYOK)'
+    required: false
+    default: ''
+  ai-base-url:
+    description: 'Custom OpenAI-compatible Base URL (e.g., https://api.openai.com/v1)'
+    required: false
+    default: ''
+  ai-model-name:
+    description: 'LLM Model Name (e.g. Qwen/Qwen3.8-27B, gpt-4o)'
+    required: false
+    default: 'Qwen/Qwen3.8-27B'
+
+outputs:
+  board-url:
+    description: 'Deep-link URL directly to the generated Miro perspective frame'
+  frame-id:
+    description: 'Generated Miro Frame Widget ID'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install OmniArch Dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests pydantic openai python-dotenv pygithub
+
+    - name: Run OmniArch Architecture Generation
+      shell: bash
+      env:
+        MIRO_ACCESS_TOKEN: ${{ inputs.miro-access-token }}
+        MIRO_BOARD_ID: ${{ inputs.miro-board-id }}
+        INPUT_PERSPECTIVE: ${{ inputs.perspective }}
+        INPUT_CUSTOM_INSTRUCTIONS: ${{ inputs.custom-instructions }}
+        INPUT_PROVIDER: ${{ inputs.ai-provider }}
+        INPUT_API_KEY: ${{ inputs.ai-api-key }}
+        INPUT_BASE_URL: ${{ inputs.ai-base-url }}
+        INPUT_MODEL_NAME: ${{ inputs.ai-model-name }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_REF: ${{ github.ref }}
+      run: |
+        python - << 'EOF'
+        import os
+        import json
+        import sys
+        
+        # Load local backend analyzer & engine
+        sys.path.insert(0, os.getcwd())
+        from backend.analyzer import analyze_codebase
+        from backend.qwen_engine import QwenEngine
+        from backend.miro_client import MiroClient
+        
+        print("[1/3] Ingesting codebase directory...")
+        codebase_data = analyze_codebase(source_type="local", source_value=os.getcwd())
+        
+        print("[2/3] Running Qwen architectural synthesis...")
+        engine = QwenEngine()
+        arch_data = engine.generate_architecture(
+            codebase_data=codebase_data,
+            provider=os.getenv("INPUT_PROVIDER", "modelscope"),
+            api_key=os.getenv("INPUT_API_KEY") or None,
+            base_url=os.getenv("INPUT_BASE_URL") or None,
+            model_name=os.getenv("INPUT_MODEL_NAME") or None,
+            perspective=os.getenv("INPUT_PERSPECTIVE", "overview"),
+            custom_instructions=os.getenv("INPUT_CUSTOM_INSTRUCTIONS", "")
+        )
+        
+        print(f"[3/3] Synchronizing to Miro Board: {os.getenv('MIRO_BOARD_ID')}...")
+        client = MiroClient(
+            access_token=os.getenv("MIRO_ACCESS_TOKEN"),
+            board_id=os.getenv("MIRO_BOARD_ID")
+        )
+        sync_result = client.sync_architecture_diagram(
+            arch_data=arch_data,
+            perspective=os.getenv("INPUT_PERSPECTIVE", "overview")
+        )
+        
+        board_url = sync_result.get("board_url", "")
+        frame_id = sync_result.get("frame_id", "")
+        print(f"[SUCCESS] Miro Frame Sync Complete! Deep Link: {board_url}")
+        
+        # Write outputs to GitHub Action environment
+        if "GITHUB_OUTPUT" in os.environ:
+            with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                f.write(f"board-url={board_url}\n")
+                f.write(f"frame-id={frame_id}\n")
+        EOF
