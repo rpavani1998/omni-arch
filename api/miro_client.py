@@ -1,5 +1,6 @@
 import os
 import requests
+import re
 from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 
@@ -68,6 +69,28 @@ class MiroClient:
         resp.raise_for_status()
         return resp.json()
 
+    def get_board_items(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Retrieves existing board items for in-place incremental diffing."""
+        url = f"{self.base_url}/boards/{self.board_id}/items?limit={limit}"
+        try:
+            resp = requests.get(url, headers=self.headers)
+            if resp.status_code == 200:
+                return resp.json().get("data", [])
+        except Exception as e:
+            print(f"[MiroClient] Error fetching board items: {e}")
+        return []
+
+    def get_board_connectors(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Retrieves existing board connectors."""
+        url = f"{self.base_url}/boards/{self.board_id}/connectors?limit={limit}"
+        try:
+            resp = requests.get(url, headers=self.headers)
+            if resp.status_code == 200:
+                return resp.json().get("data", [])
+        except Exception as e:
+            print(f"[MiroClient] Error fetching board connectors: {e}")
+        return []
+
     def create_shape(self, content: str, x: float, y: float, shape_type: str = "service", width: float = 300, height: float = 140) -> Dict[str, Any]:
         url = f"{self.base_url}/boards/{self.board_id}/shapes"
         style_cfg = TYPE_STYLES.get(shape_type, TYPE_STYLES["service"])
@@ -97,6 +120,54 @@ class MiroClient:
         resp = requests.post(url, headers=self.headers, json=payload)
         resp.raise_for_status()
         return resp.json()
+
+    def update_shape(
+        self, 
+        shape_id: str, 
+        content: Optional[str] = None, 
+        x: Optional[float] = None, 
+        y: Optional[float] = None, 
+        shape_type: str = "service",
+        width: float = 300, 
+        height: float = 140
+    ) -> Optional[Dict[str, Any]]:
+        """Updates an existing shape in-place without deleting or re-creating it."""
+        url = f"{self.base_url}/boards/{self.board_id}/shapes/{shape_id}"
+        style_cfg = TYPE_STYLES.get(shape_type, TYPE_STYLES["service"])
+
+        payload: Dict[str, Any] = {
+            "style": {
+                "fillColor": style_cfg["fillColor"],
+                "borderColor": style_cfg["borderColor"],
+                "borderWidth": "2.0",
+                "textAlign": "center",
+                "textAlignVertical": "middle"
+            },
+            "geometry": {
+                "width": width,
+                "height": height
+            }
+        }
+        if content is not None:
+            payload["data"] = {
+                "content": content,
+                "shape": style_cfg["shape"]
+            }
+        if x is not None and y is not None:
+            payload["position"] = {
+                "origin": "center",
+                "x": x,
+                "y": y
+            }
+
+        try:
+            resp = requests.patch(url, headers=self.headers, json=payload)
+            if resp.status_code in [200, 201]:
+                return resp.json()
+            print(f"[MiroClient] Update shape error ({resp.status_code}): {resp.text}")
+        except Exception as e:
+            print(f"[MiroClient] Update shape exception for {shape_id}: {e}")
+        return None
 
     def create_connector(
         self, 
@@ -207,8 +278,47 @@ class MiroClient:
         resp.raise_for_status()
         return resp.json()
 
+    def update_sticky_note(self, note_id: str, content: str) -> Optional[Dict[str, Any]]:
+        """Updates an existing sticky note in-place."""
+        url = f"{self.base_url}/boards/{self.board_id}/sticky_notes/{note_id}"
+        payload = {
+            "data": {
+                "content": content
+            }
+        }
+        try:
+            resp = requests.patch(url, headers=self.headers, json=payload)
+            if resp.status_code in [200, 201]:
+                return resp.json()
+        except Exception as e:
+            print(f"[MiroClient] Error updating sticky note {note_id}: {e}")
+        return None
+
+    def delete_item(self, item_id: str) -> bool:
+        """Deletes an item from the board."""
+        url = f"{self.base_url}/boards/{self.board_id}/items/{item_id}"
+        try:
+            resp = requests.delete(url, headers=self.headers)
+            return resp.status_code in [200, 204]
+        except Exception as e:
+            print(f"[MiroClient] Error deleting item {item_id}: {e}")
+            return False
+
+    def delete_connector(self, connector_id: str) -> bool:
+        """Deletes a connector from the board."""
+        url = f"{self.base_url}/boards/{self.board_id}/connectors/{connector_id}"
+        try:
+            resp = requests.delete(url, headers=self.headers)
+            return resp.status_code in [200, 204]
+        except Exception as e:
+            print(f"[MiroClient] Error deleting connector {connector_id}: {e}")
+            return False
+
     def sync_architecture_diagram(self, arch_data: Dict[str, Any], start_x: float = -300, start_y: float = -150, perspective: Optional[str] = "overview") -> Dict[str, Any]:
-        """Calculates 2D non-overlapping layout with Sugiyama crossing reduction, tier headers, orthogonal elbow connectors, and dedicated perspective Frames."""
+        """
+        Calculates 2D non-overlapping layout with Sugiyama crossing reduction, tier headers, and dedicated perspective Frames.
+        Performs in-place incremental diffing on PR updates so existing shapes are updated without canvas recreation or clutter.
+        """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         # Multi-perspective offset coordinates to maintain separate gallery frames on the same board
@@ -249,8 +359,27 @@ class MiroClient:
             lid = node.get("layer_id", "layer_services")
             if lid not in layer_buckets:
                 layer_buckets[lid] = []
-                layer_id_to_index[lid] = len(layers)
+                layer_id_to_index[lid] = len(layer_buckets)
             layer_buckets[lid].append(node)
+
+        # Fallback / augment layers if not fully specified in arch_data
+        if not layers:
+            DEFAULT_TIER_NAMES = {
+                "layer_presentation": "Presentation Tier",
+                "layer_gateway": "Ingress & Gateway",
+                "layer_services": "Core Services",
+                "layer_data": "Data & Persistence",
+                "layer_external": "External Integrations"
+            }
+            layers = [
+                {"id": lid, "name": DEFAULT_TIER_NAMES.get(lid, lid.replace("layer_", "").replace("_", " ").title())}
+                for lid in layer_buckets.keys()
+            ]
+        else:
+            existing_lids = {l["id"] for l in layers}
+            for lid in layer_buckets.keys():
+                if lid not in existing_lids:
+                    layers.append({"id": lid, "name": lid.replace("layer_", "").replace("_", " ").title()})
 
         # Build bidirectional adjacency for Sugiyama crossing minimization
         adj_map: Dict[str, List[str]] = {}
@@ -310,27 +439,80 @@ class MiroClient:
         frame_center_x = base_x + ((num_cols - 1) * col_width / 2) - 60
         frame_center_y = base_y
 
+        # Bounding box of current perspective
+        min_bound_x = base_x - 850
+        max_bound_x = base_x + frame_w + 400
+        min_bound_y = base_y - (frame_h / 2) - 400
+        max_bound_y = base_y + (frame_h / 2) + 400
+
+        # Fetch existing board items for in-place diffing
+        existing_items = self.get_board_items(limit=100)
+        
+        # Categorize items residing in this perspective frame
+        existing_shapes_by_name: Dict[str, Dict[str, Any]] = {}
+        existing_header_shapes: Dict[str, Dict[str, Any]] = {}
+        existing_sticky_note: Optional[Dict[str, Any]] = None
+        existing_frame: Optional[Dict[str, Any]] = None
+
+        def extract_name_from_content(html_str: str) -> str:
+            # Extract plain text from <strong>...</strong> or first line
+            match = re.search(r"<strong>(.*?)</strong>", html_str or "", re.IGNORECASE)
+            if match:
+                return match.group(1).strip().lower()
+            clean = re.sub(r"<[^>]+>", "", html_str or "").strip()
+            return clean.split("\n")[0].strip().lower()
+
+        for item in existing_items:
+            pos = item.get("position", {})
+            ix = pos.get("x", 0)
+            iy = pos.get("y", 0)
+            
+            # Check if item is inside this perspective region
+            if min_bound_x <= ix <= max_bound_x and min_bound_y <= iy <= max_bound_y:
+                item_type = item.get("type", "")
+                data = item.get("data", {})
+                content = data.get("content", "")
+                
+                if item_type == "shape":
+                    if "TIER" in content.upper() and "•" in content:
+                        header_key = re.sub(r"<[^>]+>", "", content).strip().lower()
+                        existing_header_shapes[header_key] = item
+                    else:
+                        name_key = extract_name_from_content(content)
+                        if name_key:
+                            existing_shapes_by_name[name_key] = item
+                elif item_type == "sticky_note":
+                    existing_sticky_note = item
+                elif item_type == "frame":
+                    if persp_info["title"].lower() in data.get("title", "").lower():
+                        existing_frame = item
+
         created_nodes_map: Dict[str, str] = {} # node_id -> miro_item_id
         node_coords_map: Dict[str, Dict[str, Any]] = {} # node_id -> {x, y, col_idx, row_idx}
         all_created_items: List[Dict[str, Any]] = []
-        created_frame = None
+        
+        updated_nodes_count = 0
+        created_nodes_count = 0
+        deleted_nodes_count = 0
 
-        # 1. Create Dedicated Perspective Frame on Miro Board
+        # 1. Perspective Frame on Miro Board
         frame_title = f"{arch_data.get('system_title', 'System')} — {persp_info['title']}"
-        try:
-            created_frame = self.create_frame(
-                title=frame_title,
-                x=frame_center_x,
-                y=frame_center_y,
-                width=frame_w,
-                height=frame_h
-            )
-            if created_frame:
-                all_created_items.append(created_frame)
-        except Exception as e:
-            print(f"[MiroClient] Error creating frame: {e}")
+        target_frame = existing_frame
+        if not target_frame:
+            try:
+                target_frame = self.create_frame(
+                    title=frame_title,
+                    x=frame_center_x,
+                    y=frame_center_y,
+                    width=frame_w,
+                    height=frame_h
+                )
+            except Exception as e:
+                print(f"[MiroClient] Error creating frame: {e}")
+        if target_frame:
+            all_created_items.append(target_frame)
 
-        # 2. Place Architecture Summary Card on left with safe clearance
+        # 2. Place / In-Place Update Architecture Summary Card on left
         summary_content = f"<p><strong>{arch_data.get('system_title', 'System Architecture')}</strong></p><br/>" \
                           f"<p><b>Perspective:</b> {persp_info['title']}</p>" \
                           f"<p><b>Style:</b> {arch_data.get('architecture_style', 'N/A')}</p>" \
@@ -338,22 +520,31 @@ class MiroClient:
                           f"<p><b>Overview:</b> {arch_data.get('summary', '')}</p><br/>" \
                           f"<p><b>Key Strengths:</b><br/>• " + "<br/>• ".join(insights.get("strengths", ["Modular microservice design", "Decoupled data boundaries"])[:2]) + "</p>"
 
-        try:
-            summary_sticky = self.create_sticky_note(
-                content=summary_content, 
-                x=base_x - 500, 
-                y=base_y, 
-                color="light_yellow", 
-                width=340
-            )
-            all_created_items.append(summary_sticky)
-        except Exception as e:
-            print(f"[MiroClient] Error creating summary sticky: {e}")
+        if existing_sticky_note:
+            try:
+                updated_sticky = self.update_sticky_note(existing_sticky_note["id"], summary_content)
+                all_created_items.append(updated_sticky or existing_sticky_note)
+            except Exception as e:
+                print(f"[MiroClient] Error updating summary sticky: {e}")
+        else:
+            try:
+                summary_sticky = self.create_sticky_note(
+                    content=summary_content, 
+                    x=base_x - 500, 
+                    y=base_y, 
+                    color="light_yellow", 
+                    width=340
+                )
+                all_created_items.append(summary_sticky)
+            except Exception as e:
+                print(f"[MiroClient] Error creating summary sticky: {e}")
 
-        # 3. Create Tier Column Headers and Node Shapes
-        shapes_to_create = []
+        # 3. Create / In-Place Update Tier Column Headers and Node Shapes
         header_y = base_y - ((max_rows - 1) * row_height / 2) - 150
         col_idx = 0
+        matched_shape_ids = set()
+
+        tasks_to_execute = []
 
         for layer in layers:
             lid = layer["id"]
@@ -364,11 +555,17 @@ class MiroClient:
             current_x = base_x + (col_idx * col_width)
             total_in_col = len(layer_nodes)
 
-            # Add Tier Column Header Shape
+            # Tier Column Header Shape
             layer_title = layer.get("name", f"Tier {col_idx + 1}")
-            shapes_to_create.append({
+            header_content = f"<p><strong>TIER {col_idx + 1} • {layer_title.upper()}</strong></p>"
+            header_key = f"tier {col_idx + 1} • {layer_title.upper()}".lower()
+
+            existing_hdr = existing_header_shapes.get(header_key)
+            tasks_to_execute.append({
+                "action": "update" if existing_hdr else "create",
+                "item_id": existing_hdr.get("id") if existing_hdr else None,
                 "node_id": f"__header_{lid}",
-                "content": f"<p><strong>TIER {col_idx + 1} • {layer_title.upper()}</strong></p>",
+                "content": header_content,
                 "x": current_x,
                 "y": header_y,
                 "shape_type": "header",
@@ -376,6 +573,8 @@ class MiroClient:
                 "height": 42,
                 "is_header": True
             })
+            if existing_hdr:
+                matched_shape_ids.add(existing_hdr["id"])
             
             for row_idx, node in enumerate(layer_nodes):
                 current_y = base_y + (row_idx * row_height) - ((total_in_col - 1) * row_height / 2)
@@ -398,44 +597,102 @@ class MiroClient:
                     "row_idx": row_idx
                 }
 
-                shapes_to_create.append({
-                    "node_id": node["id"],
-                    "content": html_content,
-                    "x": current_x,
-                    "y": current_y,
-                    "shape_type": node_type,
-                    "width": card_width,
-                    "height": card_height,
-                    "is_header": False
-                })
+                # Match by component name
+                name_key = node["name"].strip().lower()
+                existing_shape = existing_shapes_by_name.get(name_key)
+
+                if existing_shape:
+                    matched_shape_ids.add(existing_shape["id"])
+                    tasks_to_execute.append({
+                        "action": "update",
+                        "item_id": existing_shape["id"],
+                        "node_id": node["id"],
+                        "content": html_content,
+                        "x": current_x,
+                        "y": current_y,
+                        "shape_type": node_type,
+                        "width": card_width,
+                        "height": card_height,
+                        "is_header": False
+                    })
+                else:
+                    tasks_to_execute.append({
+                        "action": "create",
+                        "item_id": None,
+                        "node_id": node["id"],
+                        "content": html_content,
+                        "x": current_x,
+                        "y": current_y,
+                        "shape_type": node_type,
+                        "width": card_width,
+                        "height": card_height,
+                        "is_header": False
+                    })
             col_idx += 1
 
-        # Execute shape creations in parallel (up to 8 concurrent threads)
-        def create_single_shape(task):
+        # In-place clean up obsolete shapes removed in this PR
+        for name_key, old_shape in existing_shapes_by_name.items():
+            if old_shape["id"] not in matched_shape_ids:
+                try:
+                    self.delete_item(old_shape["id"])
+                    deleted_nodes_count += 1
+                except Exception as e:
+                    print(f"[MiroClient] Error pruning obsolete shape {old_shape['id']}: {e}")
+
+        # Execute shape operations in parallel
+        def process_single_shape_task(task):
             try:
-                resp = self.create_shape(
-                    content=task["content"],
-                    x=task["x"],
-                    y=task["y"],
-                    shape_type=task["shape_type"],
-                    width=task.get("width", card_width),
-                    height=task.get("height", card_height)
-                )
-                return task["node_id"], resp, task.get("is_header", False)
+                if task["action"] == "update" and task["item_id"]:
+                    resp = self.update_shape(
+                        shape_id=task["item_id"],
+                        content=task["content"],
+                        x=task["x"],
+                        y=task["y"],
+                        shape_type=task["shape_type"],
+                        width=task.get("width", card_width),
+                        height=task.get("height", card_height)
+                    )
+                    return task["node_id"], resp or {"id": task["item_id"]}, task.get("is_header", False), "updated"
+                else:
+                    resp = self.create_shape(
+                        content=task["content"],
+                        x=task["x"],
+                        y=task["y"],
+                        shape_type=task["shape_type"],
+                        width=task.get("width", card_width),
+                        height=task.get("height", card_height)
+                    )
+                    return task["node_id"], resp, task.get("is_header", False), "created"
             except Exception as e:
-                print(f"[MiroClient] Error creating shape {task['node_id']}: {e}")
-                return task["node_id"], None, task.get("is_header", False)
+                print(f"[MiroClient] Error processing shape {task['node_id']}: {e}")
+                return task["node_id"], None, task.get("is_header", False), "error"
 
         with ThreadPoolExecutor(max_workers=8) as executor:
-            futures = [executor.submit(create_single_shape, t) for t in shapes_to_create]
+            futures = [executor.submit(process_single_shape_task, t) for t in tasks_to_execute]
             for future in as_completed(futures):
-                node_id, resp, is_header = future.result()
+                node_id, resp, is_header, op_type = future.result()
                 if resp:
                     if not is_header:
                         created_nodes_map[node_id] = resp["id"]
+                        if op_type == "updated":
+                            updated_nodes_count += 1
+                        elif op_type == "created":
+                            created_nodes_count += 1
                     all_created_items.append(resp)
 
-        # 4. Draw Connectors with Smart Routing & Concise Captions
+        # 4. Clean up old connectors in frame and wire updated connectors
+        existing_conns = self.get_board_connectors(limit=100)
+        valid_miro_ids = set(created_nodes_map.values())
+        
+        for c in existing_conns:
+            start_item = c.get("startItem", {}).get("id")
+            end_item = c.get("endItem", {}).get("id")
+            if start_item in valid_miro_ids or end_item in valid_miro_ids:
+                try:
+                    self.delete_connector(c["id"])
+                except Exception as e:
+                    print(f"[MiroClient] Error clearing old connector {c['id']}: {e}")
+
         connectors_to_create = []
         for conn in connections:
             from_id = conn.get("from")
@@ -514,7 +771,7 @@ class MiroClient:
                 if c_resp:
                     created_connectors.append(c_resp)
 
-        frame_widget_id = created_frame.get("id") if created_frame else None
+        frame_widget_id = target_frame.get("id") if target_frame else None
         board_view_url = f"https://miro.com/app/board/{self.board_id}/"
         if frame_widget_id:
             board_view_url += f"?moveToWidget={frame_widget_id}"
@@ -524,7 +781,11 @@ class MiroClient:
             "board_url": board_view_url,
             "frame_id": frame_widget_id,
             "frame_title": frame_title,
-            "created_nodes": len(created_nodes_map),
+            "perspective": perspective,
+            "updated_nodes": updated_nodes_count,
+            "created_nodes": created_nodes_count,
+            "deleted_nodes": deleted_nodes_count,
             "created_connectors": len(created_connectors),
-            "total_items": len(all_created_items) + len(created_connectors)
+            "total_items": len(all_created_items) + len(created_connectors),
+            "sync_mode": "incremental_update" if updated_nodes_count > 0 else "initial_creation"
         }
