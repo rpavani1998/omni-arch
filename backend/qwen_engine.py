@@ -334,33 +334,97 @@ class QwenEngine:
 
         # Normalize parsed architecture
         if isinstance(candidate_json, dict):
-            # If wrapped under "architecture" or "project"
-            if "nodes" not in candidate_json:
-                if "architecture" in candidate_json and isinstance(candidate_json["architecture"], dict) and "nodes" in candidate_json["architecture"]:
-                    base_info = {k: v for k, v in candidate_json.items() if k != "architecture"}
-                    candidate_json = {**base_info, **candidate_json["architecture"]}
-                elif "components" in candidate_json:
-                    candidate_json["nodes"] = candidate_json.pop("components")
+            nodes = []
+            connections = []
 
-            if "nodes" in candidate_json and len(candidate_json["nodes"]) > 0:
+            # 1. Direct nodes format
+            if "nodes" in candidate_json and isinstance(candidate_json["nodes"], list) and len(candidate_json["nodes"]) > 0:
+                nodes = candidate_json["nodes"]
+                connections = candidate_json.get("connections", [])
+            # 2. Nested under 'architecture'
+            elif "architecture" in candidate_json and isinstance(candidate_json["architecture"], dict):
+                arch = candidate_json["architecture"]
+                if "nodes" in arch and isinstance(arch["nodes"], list):
+                    nodes = arch["nodes"]
+                elif "components" in arch and isinstance(arch["components"], list):
+                    nodes = arch["components"]
+                elif "services" in arch and isinstance(arch["services"], list):
+                    nodes = arch["services"]
+                connections = arch.get("connections", candidate_json.get("connections", []))
+            # 3. Direct components or services format
+            elif "components" in candidate_json and isinstance(candidate_json["components"], list):
+                nodes = candidate_json["components"]
+                connections = candidate_json.get("connections", [])
+            elif "services" in candidate_json and isinstance(candidate_json["services"], list):
+                nodes = candidate_json["services"]
+                connections = candidate_json.get("connections", [])
+            # 4. File-based architecture format (e.g. "files": [...])
+            elif "files" in candidate_json and isinstance(candidate_json["files"], list):
+                for f in candidate_json["files"]:
+                    p = f.get("path", f.get("name", "component"))
+                    role = f.get("role", "service")
+                    layer = "layer_gateway" if any(k in role.lower() for k in ["entry", "main", "cli", "router"]) else ("layer_data" if any(k in role.lower() for k in ["data", "db", "dataset", "store", "csv"]) else "layer_services")
+                    ntype = "gateway" if "gateway" in layer else ("database" if "data" in layer else "service")
+                    node_id = re.sub(r'[^a-zA-Z0-9_]', '_', p)
+                    nodes.append({
+                        "id": node_id,
+                        "name": p,
+                        "layer_id": layer,
+                        "type": ntype,
+                        "tech": f.get("tech", "Python / PyTorch"),
+                        "description": ", ".join(f.get("responsibilities", [])) if isinstance(f.get("responsibilities"), list) else f.get("role", "Component"),
+                        "endpoints_or_features": f.get("functions", f.get("classes", []))[:3]
+                    })
+                    for dep in f.get("dependencies", []):
+                        dep_id = re.sub(r'[^a-zA-Z0-9_]', '_', dep)
+                        connections.append({
+                            "from": node_id,
+                            "to": dep_id,
+                            "protocol": "Python Import",
+                            "label": "Calls"
+                        })
+
+            if len(nodes) > 0:
+                # Ensure each node has required fields
+                cleaned_nodes = []
+                for n in nodes:
+                    if isinstance(n, dict):
+                        nid = str(n.get("id", n.get("name", "node"))).replace(".", "_")
+                        nname = n.get("name", n.get("id", "Service"))
+                        lid = n.get("layer_id", "layer_services")
+                        cleaned_nodes.append({
+                            "id": nid,
+                            "name": nname,
+                            "layer_id": lid if lid.startswith("layer_") else f"layer_{lid}",
+                            "type": n.get("type", "service"),
+                            "tech": n.get("tech", "Python / Cloud"),
+                            "description": n.get("description", "Core system component"),
+                            "endpoints_or_features": n.get("endpoints_or_features", [])[:3]
+                        })
+
                 # Ensure layers exist
-                if "layers" not in candidate_json or not candidate_json["layers"]:
-                    candidate_json["layers"] = [
-                        {"id": "layer_presentation", "name": "Presentation & Clients", "order": 1},
-                        {"id": "layer_gateway", "name": "API & Ingress Gateway", "order": 2},
-                        {"id": "layer_services", "name": "Core Application Services", "order": 3},
-                        {"id": "layer_data", "name": "Persistence & Caching", "order": 4},
-                        {"id": "layer_external", "name": "External & Third-Party APIs", "order": 5}
-                    ]
-                if "system_title" not in candidate_json:
-                    candidate_json["system_title"] = candidate_json.get("project", "Analyzed Architecture")
-                if "insights" not in candidate_json:
-                    candidate_json["insights"] = {
-                        "strengths": ["Modular service structure", "Decoupled domain layers"],
-                        "bottlenecks": ["High database I/O on large batches"],
-                        "recommendations": ["Introduce caching and async task queues"]
-                    }
-                return candidate_json
+                layers = candidate_json.get("layers", [
+                    {"id": "layer_presentation", "name": "Presentation & Clients", "order": 1},
+                    {"id": "layer_gateway", "name": "API & Ingress Gateway", "order": 2},
+                    {"id": "layer_services", "name": "Core Application Services", "order": 3},
+                    {"id": "layer_data", "name": "Persistence & Caching", "order": 4},
+                    {"id": "layer_external", "name": "External & Third-Party APIs", "order": 5}
+                ])
+
+                return {
+                    "system_title": candidate_json.get("system_title", candidate_json.get("project", "Analyzed Architecture")),
+                    "summary": candidate_json.get("summary", candidate_json.get("description", "System architecture extracted from codebase.")),
+                    "architecture_style": candidate_json.get("architecture_style", "Modular Architecture"),
+                    "tech_stack": candidate_json.get("tech_stack", ["Python", "PyTorch"]),
+                    "layers": layers,
+                    "nodes": cleaned_nodes,
+                    "connections": connections or candidate_json.get("connections", []),
+                    "insights": candidate_json.get("insights", {
+                        "strengths": ["Clear modular separation", "Scalable domain boundaries"],
+                        "bottlenecks": ["Compute and data throughput dependencies"],
+                        "recommendations": ["Introduce caching layers and pipeline orchestration"]
+                    })
+                }
 
         return self._get_fallback()
 
