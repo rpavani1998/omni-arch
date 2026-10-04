@@ -22,7 +22,7 @@ except ImportError:
 
 load_dotenv()
 
-app = FastAPI(title="QwenArch API", description="Codebase to Miro Architecture Engine powered by Qwen")
+app = FastAPI(title="OmniArch API", description="Universal Codebase to Miro Architecture Engine powered by Multi-Model AI")
 
 app.add_middleware(
     CORSMiddleware,

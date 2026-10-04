@@ -569,12 +569,12 @@ export default function App() {
       {/* Navbar */}
       <header className="navbar">
         <div className="brand-badge">
-          <div className="brand-logo-qwen">Q</div>
+          <div className="brand-logo-qwen">O</div>
           <span className="brand-cross">/</span>
           <div className="brand-logo-miro">M</div>
           <div className="brand-info">
-            <h1>QwenArch</h1>
-            <p>Codebase to Miro Architecture Engine</p>
+            <h1>OmniArch AI</h1>
+            <p>Universal Codebase to Miro Architecture Engine</p>
           </div>
         </div>
 
