@@ -10,19 +10,28 @@ try:
     from analyzer import CodebaseAnalyzer
     from engine import ArchitectureEngine
     from miro_client import MiroClient
+    from security import SecurityAndTelemetryMiddleware
+    from oauth import oauth_manager, installation_store
 except ImportError:
     try:
         from api.analyzer import CodebaseAnalyzer
         from api.engine import ArchitectureEngine
         from api.miro_client import MiroClient
+        from api.security import SecurityAndTelemetryMiddleware
+        from api.oauth import oauth_manager, installation_store
     except ImportError:
         from backend.analyzer import CodebaseAnalyzer
         from backend.engine import ArchitectureEngine
         from backend.miro_client import MiroClient
+        from backend.security import SecurityAndTelemetryMiddleware
+        from backend.oauth import oauth_manager, installation_store
 
 load_dotenv()
 
 app = FastAPI(title="OmniArch API", description="Universal Codebase to Miro Architecture Engine powered by Multi-Model AI")
+
+# Security & Telemetry Middleware (Rate Limiting, HSTS, CSP, Latency Logging)
+app.add_middleware(SecurityAndTelemetryMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,10 +66,12 @@ class SyncMiroRequest(BaseModel):
     # Custom Miro Credentials
     access_token: Optional[str] = None
     board_id: Optional[str] = None
+    team_id: Optional[str] = None
 
 class BoardInfoRequest(BaseModel):
     access_token: Optional[str] = None
     board_id: Optional[str] = None
+    team_id: Optional[str] = None
 
 SAMPLE_REPOS = [
     {
@@ -127,9 +138,11 @@ def health():
 
 @router.get("/board-info")
 @router.post("/board-info")
-def get_board_info(access_token: Optional[str] = None, board_id: Optional[str] = None, req: Optional[BoardInfoRequest] = None):
+def get_board_info(access_token: Optional[str] = None, board_id: Optional[str] = None, team_id: Optional[str] = None, req: Optional[BoardInfoRequest] = None):
     try:
-        token = (req.access_token if req else None) or access_token
+        t_id = (req.team_id if req else None) or team_id
+        inst = installation_store.get_installation(t_id) if t_id else None
+        token = (req.access_token if req else None) or access_token or (inst.get("access_token") if inst else None)
         b_id = (req.board_id if req else None) or board_id
         client = MiroClient(access_token=token, board_id=b_id) if (token or b_id) else miro_client
         info = client.get_board_info()
@@ -251,7 +264,9 @@ def scaffold_component(req: ScaffoldRequest):
 @router.post("/sync-miro")
 def sync_to_miro(req: SyncMiroRequest):
     try:
-        client = MiroClient(access_token=req.access_token, board_id=req.board_id) if (req.access_token or req.board_id) else miro_client
+        inst = installation_store.get_installation(req.team_id) if req.team_id else None
+        token = req.access_token or (inst.get("access_token") if inst else None)
+        client = MiroClient(access_token=token, board_id=req.board_id) if (token or req.board_id) else miro_client
         res = client.sync_architecture_diagram(
             arch_data=req.architecture,
             start_x=req.offset_x or -300,
@@ -264,6 +279,35 @@ def sync_to_miro(req: SyncMiroRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+from fastapi.responses import RedirectResponse
+
+@router.get("/oauth/authorize")
+def oauth_authorize(team_id: Optional[str] = None, redirect: bool = False):
+    auth_data = oauth_manager.generate_authorization_url(team_id=team_id)
+    if redirect:
+        return RedirectResponse(url=auth_data["url"])
+    return auth_data
+
+@router.get("/oauth/callback")
+def oauth_callback(code: str, state: str):
+    if not oauth_manager.validate_state(state):
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth CSRF state parameter.")
+    try:
+        token_info = oauth_manager.exchange_code_for_token(code)
+        team_id = token_info.get("team_id")
+        return RedirectResponse(url=f"/?oauth=success&team_id={team_id}")
+    except Exception as e:
+        return RedirectResponse(url=f"/?oauth=error&message={str(e)}")
+
+@router.get("/oauth/installations")
+def list_installations():
+    return {"installations": installation_store.list_installations()}
+
+@router.delete("/oauth/installations/{team_id}")
+def delete_installation(team_id: str):
+    success = installation_store.delete_installation(team_id)
+    return {"success": success}
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse

@@ -279,6 +279,7 @@ export default function App() {
       return saved ? JSON.parse(saved) : {
         miroAccessToken: '',
         miroBoardId: '',
+        miroTeamId: '',
         aiProvider: 'modelscope',
         aiApiKey: '',
         aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
@@ -289,6 +290,7 @@ export default function App() {
       return {
         miroAccessToken: '',
         miroBoardId: '',
+        miroTeamId: '',
         aiProvider: 'modelscope',
         aiApiKey: '',
         aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
@@ -304,6 +306,7 @@ export default function App() {
   const [showGithubToken, setShowGithubToken] = useState(false);
   const [testingMiro, setTestingMiro] = useState(false);
   const [miroTestResult, setMiroTestResult] = useState(null);
+  const [oauthNotice, setOauthNotice] = useState(null);
 
   // Bi-directional Scaffolding Modal State
   const [showScaffoldModal, setShowScaffoldModal] = useState(false);
@@ -386,11 +389,32 @@ export default function App() {
     fetchSamplePresets();
     loadHistory();
 
+    // Check for Miro OAuth Callback parameters
+    if (typeof window !== 'undefined' && window.location.search) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const oauthStatus = urlParams.get('oauth');
+      const teamId = urlParams.get('team_id');
+      const errorMsg = urlParams.get('message');
+      
+      if (oauthStatus === 'success' && teamId) {
+        setCustomSettings(prev => {
+          const updated = { ...prev, miroTeamId: teamId };
+          try { localStorage.setItem('qwenarch_custom_settings', JSON.stringify(updated)); } catch (e) {}
+          return updated;
+        });
+        setOauthNotice({ success: true, message: `Successfully authenticated Miro Team ${teamId} via OAuth2.` });
+        fetchBoardInfo(undefined, undefined, teamId);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (oauthStatus === 'error') {
+        setOauthNotice({ success: false, message: `Miro OAuth error: ${errorMsg || 'Authorization failed'}` });
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+
     // Initialize Miro Web SDK v2 if running inside an active Miro Canvas
     const initMiroSDK = async () => {
       try {
         if (typeof window !== 'undefined' && window.miro && window.miro.board) {
-          // Register toolbar panel opener if icon is clicked
           if (window.miro.board.ui && window.miro.board.ui.on) {
             window.miro.board.ui.on('icon:click', async () => {
               try {
@@ -438,13 +462,14 @@ export default function App() {
     try {
       localStorage.setItem('qwenarch_custom_settings', JSON.stringify(newSettings));
     } catch (e) {}
-    fetchBoardInfo(newSettings.miroAccessToken, newSettings.miroBoardId);
+    fetchBoardInfo(newSettings.miroAccessToken, newSettings.miroBoardId, newSettings.miroTeamId);
   };
 
   const handleResetSettings = () => {
     const defaults = {
       miroAccessToken: '',
       miroBoardId: '',
+      miroTeamId: '',
       aiProvider: 'modelscope',
       aiApiKey: '',
       aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
@@ -456,7 +481,8 @@ export default function App() {
       localStorage.removeItem('qwenarch_custom_settings');
     } catch (e) {}
     setMiroTestResult(null);
-    fetchBoardInfo('', '');
+    setOauthNotice(null);
+    fetchBoardInfo('', '', '');
   };
 
   const loadHistory = () => {
@@ -480,16 +506,17 @@ export default function App() {
     } catch (e) {}
   };
 
-  const fetchBoardInfo = async (customToken, customBoard) => {
+  const fetchBoardInfo = async (customToken, customBoard, customTeam) => {
     try {
       const token = customToken !== undefined ? customToken : customSettings.miroAccessToken;
       const board = customBoard !== undefined ? customBoard : customSettings.miroBoardId;
+      const team = customTeam !== undefined ? customTeam : customSettings.miroTeamId;
       
-      const hasCustom = Boolean(token || board);
+      const hasCustom = Boolean(token || board || team);
       const res = await fetch('/api/board-info', {
         method: hasCustom ? 'POST' : 'GET',
         headers: { 'Content-Type': 'application/json' },
-        body: hasCustom ? JSON.stringify({ access_token: token || undefined, board_id: board || undefined }) : undefined
+        body: hasCustom ? JSON.stringify({ access_token: token || undefined, board_id: board || undefined, team_id: team || undefined }) : undefined
       });
       const data = await res.json();
       if (data.success) {
@@ -508,7 +535,7 @@ export default function App() {
     setTestingMiro(true);
     setMiroTestResult(null);
     try {
-      const res = await fetchBoardInfo(customSettings.miroAccessToken, customSettings.miroBoardId);
+      const res = await fetchBoardInfo(customSettings.miroAccessToken, customSettings.miroBoardId, customSettings.miroTeamId);
       if (res.success) {
         setMiroTestResult({
           success: true,
@@ -517,7 +544,7 @@ export default function App() {
       } else {
         setMiroTestResult({
           success: false,
-          message: res.error || 'Connection failed. Verify access token and board ID permissions.'
+          message: res.error || 'Connection failed. Verify access token or OAuth installation.'
         });
       }
     } catch (e) {
@@ -582,7 +609,8 @@ export default function App() {
           offset_x: -300,
           offset_y: -150,
           access_token: customSettings.miroAccessToken || undefined,
-          board_id: customSettings.miroBoardId || undefined
+          board_id: customSettings.miroBoardId || undefined,
+          team_id: customSettings.miroTeamId || undefined
         })
       });
 
@@ -1441,9 +1469,44 @@ export default function App() {
                   Provide your personal Miro OAuth2 / Developer Access Token and Board ID to sync directly to your own boards. Leave blank to use server defaults.
                 </p>
 
+                {/* OAuth2 1-Click Install Banner */}
+                <div className="oauth-install-box">
+                  <div className="oauth-status-info">
+                    <strong>Miro Marketplace OAuth2 Flow</strong>
+                    <p>Authorize OmniArch to sync diagrams to your team board with 1 click, or provide manual developer tokens below.</p>
+                  </div>
+                  {customSettings.miroTeamId ? (
+                    <div className="oauth-connected-badge">
+                      <CheckCircle2 size={14} style={{ color: '#10b981' }} />
+                      <span>Authorized for Team {customSettings.miroTeamId}</span>
+                      <button 
+                        type="button" 
+                        className="oauth-disconnect-btn"
+                        onClick={() => {
+                          setCustomSettings({ ...customSettings, miroTeamId: '' });
+                          fetchBoardInfo(customSettings.miroAccessToken, customSettings.miroBoardId, '');
+                        }}
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="oauth-auth-btn"
+                      onClick={() => {
+                        window.location.href = '/api/oauth/authorize?redirect=true';
+                      }}
+                    >
+                      <Share2 size={14} />
+                      <span>Connect Miro via OAuth2</span>
+                    </button>
+                  )}
+                </div>
+
                 <div className="settings-grid">
                   <div className="settings-field">
-                    <label>Miro Access Token</label>
+                    <label>Miro Access Token (Manual PAT Override)</label>
                     <div className="input-with-action">
                       <input
                         type={showMiroToken ? 'text' : 'password'}
@@ -1691,26 +1754,34 @@ export default function App() {
             </div>
 
             <div className="modal-footer">
-              <button
-                type="button"
-                className="reset-btn"
-                onClick={handleResetSettings}
-              >
-                <RotateCcw size={14} />
-                <span>Reset to Defaults</span>
-              </button>
+              <div className="modal-legal-links">
+                <a href="/privacy.html" target="_blank" rel="noreferrer">Privacy Policy</a>
+                <span>•</span>
+                <a href="/terms.html" target="_blank" rel="noreferrer">Terms of Service</a>
+              </div>
 
-              <button
-                type="button"
-                className="save-btn"
-                onClick={() => {
-                  handleSaveSettings(customSettings);
-                  setShowSettingsModal(false);
-                }}
-              >
-                <Save size={14} />
-                <span>Save & Apply Settings</span>
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <button
+                  type="button"
+                  className="reset-btn"
+                  onClick={handleResetSettings}
+                >
+                  <RotateCcw size={14} />
+                  <span>Reset to Defaults</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="save-btn"
+                  onClick={() => {
+                    handleSaveSettings(customSettings);
+                    setShowSettingsModal(false);
+                  }}
+                >
+                  <Save size={14} />
+                  <span>Save & Apply Settings</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

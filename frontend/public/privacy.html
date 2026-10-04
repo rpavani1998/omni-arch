@@ -3,54 +3,47 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Policy — OmniArch AI</title>
+  <title>Privacy Policy - OmniArch</title>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      line-height: 1.6;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0b0f19;
+      color: #f8fafc;
+      line-height: 1.65;
+      padding: 2.5rem 1.5rem;
       max-width: 800px;
-      margin: 40px auto;
-      padding: 0 20px;
-      color: #1e293b;
-      background: #f8fafc;
+      margin: 0 auto;
     }
-    .container {
-      background: #ffffff;
-      padding: 36px 48px;
-      border-radius: 12px;
-      border: 1px solid #e2e8f0;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    }
-    h1 { color: #0f172a; margin-top: 0; font-size: 28px; }
-    h2 { color: #334155; margin-top: 24px; font-size: 18px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
-    p, li { color: #475569; font-size: 15px; }
-    .badge { display: inline-block; background: #e0f2fe; color: #0284c7; padding: 4px 10px; border-radius: 6px; font-size: 13px; font-weight: 600; }
+    h1, h2, h3 { color: #ffffff; font-weight: 600; margin-top: 1.8rem; }
+    h1 { font-size: 2rem; border-bottom: 1px solid rgba(148, 163, 184, 0.2); padding-bottom: 0.75rem; }
+    a { color: #38bdf8; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .badge { background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+    .card { background: #111827; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 8px; padding: 1.25rem; margin: 1.5rem 0; }
+    ul { padding-left: 1.5rem; }
+    li { margin-bottom: 0.4rem; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <span class="badge">100% Free &amp; BYOK Model</span>
-    <h1>Privacy Policy for OmniArch AI</h1>
-    <p><em>Last updated: October 2026</em></p>
+  <span class="badge">Enterprise Security & Compliance</span>
+  <h1>Privacy Policy for OmniArch</h1>
+  <p><em>Last Updated: October 4, 2026</em></p>
 
-    <h2>1. Overview</h2>
-    <p>OmniArch AI ("we", "our") is a free, open, and developer-first architecture visualization tool. We respect your privacy and enforce a strict <strong>Bring Your Own Key (BYOK)</strong> and <strong>Zero-Storage</strong> policy.</p>
-
-    <h2>2. Data Processing &amp; Ephemeral Handling</h2>
-    <ul>
-      <li><strong>Code Ingestion:</strong> Your codebase files, manifests, and routes are analyzed entirely in-memory for the sole purpose of extracting architectural graphs. We do not store, index, or retain your source code on our servers.</li>
-      <li><strong>Credentials &amp; API Keys:</strong> Any custom API keys (Miro Access Tokens, ModelScope / OpenAI / Custom LLM keys) provided in the application settings are stored locally in your browser's <code>localStorage</code> or passed directly in ephemeral request headers. They are never logged or stored in external databases.</li>
-      <li><strong>LLM Inference:</strong> Inferences are executed directly against your selected provider endpoint (e.g., Alibaba ModelScope, local Ollama, or your custom OpenAI-compatible endpoint).</li>
-    </ul>
-
-    <h2>3. Third-Party Integrations</h2>
-    <p>When you sync architecture diagrams to Miro, OmniArch AI communicates directly with the official Miro REST API v2 using your authorized credentials to create shapes, frames, and connector elements on your designated board.</p>
-
-    <h2>4. Changes to This Policy</h2>
-    <p>We may update this Privacy Policy as our marketplace capabilities evolve. Continued use of the application indicates acceptance of any revisions.</p>
-
-    <h2>5. Contact &amp; Support</h2>
-    <p>For questions or support, visit our open repository on GitHub: <a href="https://github.com/rpavani1998/qwen-arch-canvas" target="_blank">OmniArch AI Repository</a>.</p>
+  <div class="card">
+    <strong>Zero-Retention Policy:</strong> OmniArch processes software codebases transiently in-memory for the sole purpose of generating architecture diagrams and scaffolding code. Source code is never stored on our servers.
   </div>
+
+  <h2>1. Data Handling & Security</h2>
+  <ul>
+    <li><strong>Zero Code Retention:</strong> Source code parsed from GitHub or local repos is scrubbed in-memory and discarded immediately upon response completion.</li>
+    <li><strong>Automated Secret Redaction:</strong> Private keys, passwords, database URIs, AWS tokens, and bearer tokens are automatically redacted prior to LLM synthesis.</li>
+    <li><strong>BYOK (Bring Your Own Key):</strong> User API keys are stored only in local client storage or workflow secrets, never in centralized server databases.</li>
+  </ul>
+
+  <h2>2. Miro Web SDK & OAuth2</h2>
+  <p>When installed on Miro boards, OmniArch requests only <code>boards:read</code> and <code>boards:write</code> permissions to place shapes and connectors on authorized boards.</p>
+
+  <h2>3. Contact</h2>
+  <p>For questions or audits, visit <a href="https://github.com/rpavani1998/qwen-arch-canvas">GitHub Repository</a> or email <a href="mailto:support@omniarch.dev">support@omniarch.dev</a>.</p>
 </body>
 </html>
