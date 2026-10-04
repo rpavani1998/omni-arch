@@ -12,6 +12,10 @@
       "destination": "/api/index.py"
     },
     {
+      "source": "/api",
+      "destination": "/api/index.py"
+    },
+    {
       "source": "/slides.html",
       "destination": "/slides.html"
     },
@@ -24,7 +28,11 @@
       "destination": "/assets/$1"
     },
     {
-      "source": "/(.*)",
+      "source": "/favicon.ico",
+      "destination": "/favicon.ico"
+    },
+    {
+      "source": "/((?!api/|api$|slides|assets|favicon.ico).*)",
       "destination": "/index.html"
     }
   ]

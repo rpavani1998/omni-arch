@@ -194,9 +194,10 @@ def sync_to_miro(req: SyncMiroRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Include router for both /api prefix and root level to handle direct or rewritten invocations
+# Include router for root, /api, and /api/index.py to handle all Vercel proxying patterns
 app.include_router(router, prefix="")
 app.include_router(router, prefix="/api")
+app.include_router(router, prefix="/api/index.py")
 
 if __name__ == "__main__":
     import uvicorn
