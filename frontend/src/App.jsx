@@ -353,8 +353,9 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           architecture: targetArch,
-          offset_x: -250,
-          offset_y: -120,
+          perspective: selectedPerspective,
+          offset_x: -300,
+          offset_y: -150,
           access_token: customSettings.miroAccessToken || undefined,
           board_id: customSettings.miroBoardId || undefined
         })
@@ -1006,13 +1007,13 @@ export default function App() {
             </div>
           )}
 
-          {/* Success Banner */}
+          {/* Success Banner with Frame Zoom */}
           {syncSuccess && (
             <div className="success-banner">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <CheckCircle2 size={16} />
                 <span>
-                  <b>Successfully Rendered on Miro Canvas!</b> ({syncSuccess.created_nodes} nodes & {syncSuccess.created_connectors} connectors)
+                  <b>Framed & Synced on Miro:</b> {syncSuccess.frame_title || 'Architecture Canvas'} ({syncSuccess.created_nodes} nodes, {syncSuccess.created_connectors} connectors)
                 </span>
               </div>
               <a
@@ -1020,9 +1021,10 @@ export default function App() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="view-miro-btn"
+                title="Open and zoom directly into this perspective frame on Miro"
               >
-                <span>Open in Miro</span>
-                <ArrowRight size={14} />
+                <span>Zoom to Frame on Miro</span>
+                <ExternalLink size={14} />
               </a>
             </div>
           )}

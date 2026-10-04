@@ -48,6 +48,7 @@ class AnalyzeRequest(BaseModel):
 
 class SyncMiroRequest(BaseModel):
     architecture: Dict[str, Any]
+    perspective: Optional[str] = "overview"
     offset_x: Optional[float] = -300
     offset_y: Optional[float] = -150
     # Custom Miro Credentials
@@ -217,7 +218,8 @@ def sync_to_miro(req: SyncMiroRequest):
         res = client.sync_architecture_diagram(
             arch_data=req.architecture,
             start_x=req.offset_x or -300,
-            start_y=req.offset_y or -150
+            start_y=req.offset_y or -150,
+            perspective=req.perspective or "overview"
         )
         return {
             "success": True,
