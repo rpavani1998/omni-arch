@@ -70,7 +70,7 @@ class MiroClient:
         resp.raise_for_status()
         return resp.json()
 
-    def create_shape(self, content: str, x: float, y: float, shape_type: str = "service", width: float = 220, height: float = 110) -> Dict[str, Any]:
+    def create_shape(self, content: str, x: float, y: float, shape_type: str = "service", width: float = 300, height: float = 140) -> Dict[str, Any]:
         url = f"{self.base_url}/boards/{self.board_id}/shapes"
         style_cfg = TYPE_STYLES.get(shape_type, TYPE_STYLES["service"])
 
@@ -106,7 +106,7 @@ class MiroClient:
         end_id: str, 
         caption: str = "", 
         stroke_color: str = "#0284c7",
-        shape: str = "curved"
+        shape: str = "elbow"
     ) -> Optional[Dict[str, Any]]:
         url = f"{self.base_url}/boards/{self.board_id}/connectors"
         clean_caption = (caption or "").strip()
@@ -137,7 +137,7 @@ class MiroClient:
             if resp.status_code in [200, 201]:
                 return resp.json()
             else:
-                # If custom style failed, fallback to minimal payload while preserving caption
+                # Fallback to minimal payload while preserving caption
                 fallback_payload = {
                     "startItem": {"id": start_id},
                     "endItem": {"id": end_id},
@@ -185,7 +185,7 @@ class MiroClient:
             print(f"[MiroClient] Frame creation exception: {e}")
             return None
 
-    def create_sticky_note(self, content: str, x: float, y: float, color: str = "light_yellow", width: float = 280) -> Dict[str, Any]:
+    def create_sticky_note(self, content: str, x: float, y: float, color: str = "light_yellow", width: float = 340) -> Dict[str, Any]:
         url = f"{self.base_url}/boards/{self.board_id}/sticky_notes"
         payload = {
             "data": {
@@ -210,18 +210,18 @@ class MiroClient:
         return resp.json()
 
     def sync_architecture_diagram(self, arch_data: Dict[str, Any], start_x: float = -300, start_y: float = -150, perspective: Optional[str] = "overview") -> Dict[str, Any]:
-        """Calculates 2D non-overlapping layout with barycenter alignment, orthogonal elbow connectors, and dedicated perspective Frames."""
+        """Calculates 2D non-overlapping layout with Sugiyama crossing reduction, tier headers, orthogonal elbow connectors, and dedicated perspective Frames."""
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         # Multi-perspective offset coordinates to maintain separate gallery frames on the same board
         PERSPECTIVE_OFFSETS = {
             "overview": {"x": 0, "y": 0, "title": "System Overview"},
-            "data_flow": {"x": 3200, "y": 0, "title": "Data Flow & Request Lifecycle"},
-            "security_auth": {"x": 6400, "y": 0, "title": "Security & Zero-Trust Auth"},
-            "event_driven": {"x": 0, "y": 2200, "title": "Event-Driven & Async Pipelines"},
-            "database_storage": {"x": 3200, "y": 2200, "title": "Database & Storage Topology"},
-            "devops_cloud": {"x": 6400, "y": 2200, "title": "Cloud & Infrastructure"},
-            "ai_rag": {"x": 0, "y": 4400, "title": "AI / LLM & RAG Pipeline"}
+            "data_flow": {"x": 3600, "y": 0, "title": "Data Flow & Request Lifecycle"},
+            "security_auth": {"x": 7200, "y": 0, "title": "Security & Zero-Trust Auth"},
+            "event_driven": {"x": 0, "y": 2400, "title": "Event-Driven & Async Pipelines"},
+            "database_storage": {"x": 3600, "y": 2400, "title": "Database & Storage Topology"},
+            "devops_cloud": {"x": 7200, "y": 2400, "title": "Cloud & Infrastructure"},
+            "ai_rag": {"x": 0, "y": 4800, "title": "AI / LLM & RAG Pipeline"}
         }
 
         persp_info = PERSPECTIVE_OFFSETS.get(perspective or "overview", {"x": 0, "y": 0, "title": "System Architecture"})
@@ -237,59 +237,75 @@ class MiroClient:
 
         # Group nodes by layer
         layer_buckets: Dict[str, List[Dict[str, Any]]] = {}
-        node_layer_index: Dict[str, int] = {}
+        layer_id_to_index: Dict[str, int] = {}
         
         for l_idx, layer in enumerate(layers):
             layer_buckets[layer["id"]] = []
+            layer_id_to_index[layer["id"]] = l_idx
 
         for node in nodes:
             lid = node.get("layer_id", "layer_services")
             if lid not in layer_buckets:
                 layer_buckets[lid] = []
+                layer_id_to_index[lid] = len(layers)
             layer_buckets[lid].append(node)
 
-        # Build adjacency mapping for crossing-minimization (Sugiyama Barycenter heuristic)
-        incoming_map: Dict[str, List[str]] = {}
+        # Build bidirectional adjacency for Sugiyama crossing minimization
+        adj_map: Dict[str, List[str]] = {}
         for conn in connections:
             src = conn.get("from")
             dst = conn.get("to")
             if src and dst:
-                incoming_map.setdefault(dst, []).append(src)
+                adj_map.setdefault(dst, []).append(src)
+                adj_map.setdefault(src, []).append(dst)
 
         node_pos_index: Dict[str, float] = {}
 
-        # Sort nodes within each tier column to align with their connecting parents
+        # 1. Forward pass: Sort nodes within each tier column to align with connected neighbors
         for l_idx, layer in enumerate(layers):
             lid = layer["id"]
             tier_nodes = layer_buckets.get(lid, [])
             if l_idx > 0 and tier_nodes:
-                def get_barycenter(n):
-                    parents = incoming_map.get(n["id"], [])
-                    if not parents:
-                        return 999.0
-                    parent_positions = [node_pos_index.get(p, 0.0) for p in parents if p in node_pos_index]
-                    return sum(parent_positions) / len(parent_positions) if parent_positions else 999.0
+                def get_forward_barycenter(n):
+                    neighbors = adj_map.get(n["id"], [])
+                    prev_positions = [node_pos_index[nb] for nb in neighbors if nb in node_pos_index]
+                    return sum(prev_positions) / len(prev_positions) if prev_positions else 999.0
 
-                tier_nodes.sort(key=get_barycenter)
+                tier_nodes.sort(key=get_forward_barycenter)
                 layer_buckets[lid] = tier_nodes
 
             for r_idx, n in enumerate(tier_nodes):
                 node_pos_index[n["id"]] = float(r_idx)
 
-        # Generous collision-free spacing dimensions
-        col_width = 480       # 480px tier column width (240px wide corridor for orthogonal connector lines)
-        row_height = 220      # 220px row height (120px clear vertical gap between cards)
-        card_width = 240
-        card_height = 100
+        # 2. Backward pass: Refine placement of preceding tiers based on downstream targets
+        for l_idx in range(len(layers) - 2, -1, -1):
+            lid = layers[l_idx]["id"]
+            tier_nodes = layer_buckets.get(lid, [])
+            if tier_nodes:
+                def get_backward_barycenter(n):
+                    neighbors = adj_map.get(n["id"], [])
+                    next_positions = [node_pos_index[nb] for nb in neighbors if nb in node_pos_index]
+                    return sum(next_positions) / len(next_positions) if next_positions else 999.0
+
+                tier_nodes.sort(key=get_backward_barycenter)
+                layer_buckets[lid] = tier_nodes
+                for r_idx, n in enumerate(tier_nodes):
+                    node_pos_index[n["id"]] = float(r_idx)
+
+        # Generous professional presentation spacing dimensions
+        col_width = 660       # 660px tier column width (360px clear corridor between cards for clean lines)
+        row_height = 240      # 240px row height (100px clear vertical gap between cards)
+        card_width = 300      # 300px card width (ample room for titles & badges)
+        card_height = 140     # 140px card height (prevents multi-line text overflow)
 
         active_layers = [l for l in layers if layer_buckets.get(l["id"])]
         num_cols = max(1, len(active_layers))
         max_rows = max([len(nlist) for nlist in layer_buckets.values()] or [1])
 
         # Compute dynamic frame dimensions
-        frame_w = max(2400, (num_cols * col_width) + 800)
-        frame_h = max(1300, (max_rows * row_height) + 500)
-        frame_center_x = base_x + ((num_cols - 1) * col_width / 2) - 80
+        frame_w = max(3200, (num_cols * col_width) + 960)
+        frame_h = max(1600, (max_rows * row_height) + 650)
+        frame_center_x = base_x + ((num_cols - 1) * col_width / 2) - 60
         frame_center_y = base_y
 
         created_nodes_map: Dict[str, str] = {} # node_id -> miro_item_id
@@ -313,28 +329,30 @@ class MiroClient:
             print(f"[MiroClient] Error creating frame: {e}")
 
         # 2. Place Architecture Summary Card on left with safe clearance
-        summary_content = f"<b>{arch_data.get('system_title', 'System Architecture')}</b><br/><br/>" \
-                          f"<b>Perspective:</b> {persp_info['title']}<br/>" \
-                          f"<b>Style:</b> {arch_data.get('architecture_style', 'N/A')}<br/>" \
-                          f"<b>Stack:</b> {', '.join(arch_data.get('tech_stack', []))}<br/><br/>" \
-                          f"<b>Overview:</b> {arch_data.get('summary', '')}<br/><br/>" \
-                          f"<b>Key Insights:</b><br/>• " + "<br/>• ".join(insights.get("strengths", ["Modular design"])[:2])
+        summary_content = f"<p><strong style='font-size:16px;color:#0f172a;'>📊 {arch_data.get('system_title', 'System Architecture')}</strong></p><br/>" \
+                          f"<p><b>Perspective:</b> {persp_info['title']}</p>" \
+                          f"<p><b>Style:</b> {arch_data.get('architecture_style', 'N/A')}</p>" \
+                          f"<p><b>Stack:</b> {', '.join(arch_data.get('tech_stack', []))}</p><br/>" \
+                          f"<p style='font-size:12px;color:#334155;'><b>Overview:</b> {arch_data.get('summary', '')}</p><br/>" \
+                          f"<p style='font-size:12px;color:#1e293b;'><b>Key Strengths:</b><br/>• " + "<br/>• ".join(insights.get("strengths", ["Modular microservice design", "Decoupled data boundaries"])[:2]) + "</p>"
 
         try:
             summary_sticky = self.create_sticky_note(
                 content=summary_content, 
-                x=base_x - 460, 
+                x=base_x - 500, 
                 y=base_y, 
                 color="light_yellow", 
-                width=300
+                width=340
             )
             all_created_items.append(summary_sticky)
         except Exception as e:
             print(f"[MiroClient] Error creating summary sticky: {e}")
 
-        # 3. Prepare all node shape tasks
+        # 3. Create Tier Column Headers and Node Shapes
         shapes_to_create = []
+        header_y = base_y - ((max_rows - 1) * row_height / 2) - 150
         col_idx = 0
+
         for layer in layers:
             lid = layer["id"]
             layer_nodes = layer_buckets.get(lid, [])
@@ -343,14 +361,35 @@ class MiroClient:
 
             current_x = base_x + (col_idx * col_width)
             total_in_col = len(layer_nodes)
+
+            # Add Tier Column Header Shape
+            layer_title = layer.get("name", f"Tier {col_idx + 1}")
+            shapes_to_create.append({
+                "node_id": f"__header_{lid}",
+                "content": f"<p><strong style='font-size:13px;color:#475569;'>TIER {col_idx + 1}: {layer_title.upper()}</strong></p>",
+                "x": current_x,
+                "y": header_y,
+                "shape_type": "external",
+                "width": card_width,
+                "height": 48,
+                "is_header": True
+            })
             
             for row_idx, node in enumerate(layer_nodes):
                 current_y = base_y + (row_idx * row_height) - ((total_in_col - 1) * row_height / 2)
                 node_type = node.get("type", "service")
+                style_cfg = TYPE_STYLES.get(node_type, TYPE_STYLES["service"])
+                icon = style_cfg.get("icon", "⚙️")
                 
-                html_content = f"<strong>{node['name']}</strong><br/>" \
-                               f"<small style='color:#475569;'>{node.get('tech', '')}</small><br/>" \
-                               f"<span style='font-size:11px;'>{node.get('description', '')}</span>"
+                tech_str = node.get('tech', '')
+                desc_str = node.get('description', '')
+                
+                html_content = f"<p><strong style='font-size:13px;color:#0f172a;'>{icon} {node['name']}</strong></p>"
+                if tech_str:
+                    html_content += f"<p><em style='font-size:11px;color:#475569;'>{tech_str}</em></p>"
+                if desc_str:
+                    clean_desc = desc_str if len(desc_str) <= 75 else desc_str[:72] + "..."
+                    html_content += f"<p style='font-size:11px;color:#334155;'>{clean_desc}</p>"
 
                 node_coords_map[node["id"]] = {
                     "x": current_x,
@@ -364,7 +403,10 @@ class MiroClient:
                     "content": html_content,
                     "x": current_x,
                     "y": current_y,
-                    "shape_type": node_type
+                    "shape_type": node_type,
+                    "width": card_width,
+                    "height": card_height,
+                    "is_header": False
                 })
             col_idx += 1
 
@@ -376,23 +418,24 @@ class MiroClient:
                     x=task["x"],
                     y=task["y"],
                     shape_type=task["shape_type"],
-                    width=card_width,
-                    height=card_height
+                    width=task.get("width", card_width),
+                    height=task.get("height", card_height)
                 )
-                return task["node_id"], resp
+                return task["node_id"], resp, task.get("is_header", False)
             except Exception as e:
                 print(f"[MiroClient] Error creating shape {task['node_id']}: {e}")
-                return task["node_id"], None
+                return task["node_id"], None, task.get("is_header", False)
 
         with ThreadPoolExecutor(max_workers=8) as executor:
             futures = [executor.submit(create_single_shape, t) for t in shapes_to_create]
             for future in as_completed(futures):
-                node_id, resp = future.result()
+                node_id, resp, is_header = future.result()
                 if resp:
-                    created_nodes_map[node_id] = resp["id"]
+                    if not is_header:
+                        created_nodes_map[node_id] = resp["id"]
                     all_created_items.append(resp)
 
-        # 4. Draw Connectors with Smart Orthogonal Snap Routing
+        # 4. Draw Connectors with Smart Orthogonal Elbow Routing & Clean Captions
         connectors_to_create = []
         for conn in connections:
             from_id = conn.get("from")
@@ -400,56 +443,50 @@ class MiroClient:
             if from_id in created_nodes_map and to_id in created_nodes_map:
                 start_miro_id = created_nodes_map[from_id]
                 end_miro_id = created_nodes_map[to_id]
-                protocol = conn.get("protocol", "")
-                label = conn.get("label", "")
-                desc = conn.get("description", "")
-                if protocol and label and protocol != label:
-                    caption = f"{protocol} • {label}"
+                
+                protocol = (conn.get("protocol") or "").strip()
+                label = (conn.get("label") or "").strip()
+                
+                # Format clean, succinct caption (under 24 chars) to prevent line crowding
+                if protocol and not label:
+                    caption = protocol
+                elif label and not protocol:
+                    caption = label
+                elif protocol and label:
+                    caption = protocol if len(protocol) <= 16 else label
                 else:
-                    caption = label or protocol or desc or ""
+                    caption = ""
+
+                if len(caption) > 24:
+                    caption = caption[:22] + ".."
 
                 src_coord = node_coords_map.get(from_id, {"col_idx": 0, "row_idx": 0, "x": 0, "y": 0})
                 dst_coord = node_coords_map.get(to_id, {"col_idx": 0, "row_idx": 0, "x": 0, "y": 0})
 
-                # Determine intelligent snap ports & shape
-                if src_coord["col_idx"] < dst_coord["col_idx"]:
-                    # Forward tier connection (e.g. Frontend -> Gateway -> Service)
-                    start_snap = "right"
-                    end_snap = "left"
+                # Determine intelligent shape (elbow for cross-tier, curved for loops/same tier)
+                if src_coord["col_idx"] != dst_coord["col_idx"]:
                     conn_shape = "elbow"
-                elif src_coord["col_idx"] == dst_coord["col_idx"]:
-                    # Same tier connection (vertical)
-                    if src_coord["row_idx"] < dst_coord["row_idx"]:
-                        start_snap = "bottom"
-                        end_snap = "top"
-                    else:
-                        start_snap = "top"
-                        end_snap = "bottom"
-                    conn_shape = "curved"
                 else:
-                    # Feedback / Return loop
-                    start_snap = "bottom"
-                    end_snap = "bottom"
                     conn_shape = "curved"
 
                 # Smart edge colors by protocol
-                proto_lower = (conn.get("protocol") or "").lower()
+                proto_lower = protocol.lower() + " " + label.lower()
                 stroke_color = "#0284c7" # default sky blue
-                if "kafka" in proto_lower or "queue" in proto_lower or "event" in proto_lower or "pubsub" in proto_lower:
+                if any(k in proto_lower for k in ["kafka", "queue", "event", "pubsub", "async"]):
                     stroke_color = "#7c3aed" # Purple for async events
-                elif "sql" in proto_lower or "db" in proto_lower or "postgres" in proto_lower or "query" in proto_lower:
-                    stroke_color = "#d97706" # Amber for database queries
-                elif "auth" in proto_lower or "jwt" in proto_lower or "oauth" in proto_lower:
+                elif any(k in proto_lower for k in ["sql", "db", "postgres", "query", "redis", "cache"]):
+                    stroke_color = "#d97706" # Amber for database / cache
+                elif any(k in proto_lower for k in ["auth", "jwt", "oauth", "security", "token"]):
                     stroke_color = "#dc2626" # Red for auth boundaries
-                elif "grpc" in proto_lower or "rpc" in proto_lower:
+                elif any(k in proto_lower for k in ["grpc", "rpc", "internal"]):
                     stroke_color = "#059669" # Emerald for internal gRPC
+                elif any(k in proto_lower for k in ["llm", "ai", "qwen", "inference", "prompt"]):
+                    stroke_color = "#6366f1" # Indigo for AI/LLM pipelines
 
                 connectors_to_create.append({
                     "start_id": start_miro_id,
                     "end_id": end_miro_id,
-                    "caption": caption[:40] if caption else "",
-                    "start_snap": start_snap,
-                    "end_snap": end_snap,
+                    "caption": caption,
                     "shape": conn_shape,
                     "stroke_color": stroke_color
                 })
