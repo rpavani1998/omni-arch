@@ -25,7 +25,8 @@ import {
   Sun,
   Moon,
   Sliders,
-  Target
+  Target,
+  Presentation
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import ArchitectureGraph from './components/ArchitectureGraph';
@@ -416,6 +417,18 @@ export default function App() {
         </div>
 
         <div className="nav-actions">
+          {/* Pitch Deck / Presentation Slides */}
+          <a
+            href="/slides.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="deck-link-btn"
+            title="Open Interactive Pitch Deck Presentation"
+          >
+            <Presentation size={15} />
+            <span>Pitch Deck</span>
+          </a>
+
           {/* Light / Dark Mode Toggle */}
           <button 
             className="theme-toggle-btn"

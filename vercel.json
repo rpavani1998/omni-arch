@@ -19,8 +19,21 @@
       "dest": "/api/index.py"
     },
     {
+      "src": "/slides.html",
+      "dest": "/frontend/slides.html"
+    },
+    {
+      "src": "/slides/(.*)",
+      "dest": "/frontend/slides/$1"
+    },
+    {
       "src": "/assets/(.*)",
       "dest": "/frontend/assets/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/$1",
+      "check": true
     },
     {
       "src": "/(.*)",
