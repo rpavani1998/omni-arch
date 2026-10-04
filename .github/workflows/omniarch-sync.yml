@@ -1,0 +1,26 @@
+name: OmniArch Architecture Sync
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  sync-architecture:
+    name: Generate Architecture to Miro Canvas
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Run OmniArch Visual Architecture Sync
+        uses: rpavani1998/qwen-arch-canvas@v1.0.0
+        with:
+          miro-access-token: ${{ secrets.MIRO_ACCESS_TOKEN }}
+          miro-board-id: ${{ secrets.MIRO_BOARD_ID }}
+          perspective: 'overview'
+          custom-instructions: 'Highlight public API endpoints and database trust boundaries'
+          ai-provider: 'modelscope'
+          ai-api-key: ${{ secrets.MODELSCOPE_API_KEY }}

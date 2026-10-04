@@ -306,6 +306,48 @@ export default function App() {
     fetchBoardInfo();
     fetchSamplePresets();
     loadHistory();
+
+    // Initialize Miro Web SDK v2 if running inside an active Miro Canvas
+    const initMiroSDK = async () => {
+      try {
+        if (typeof window !== 'undefined' && window.miro && window.miro.board) {
+          // Register toolbar panel opener if icon is clicked
+          if (window.miro.board.ui && window.miro.board.ui.on) {
+            window.miro.board.ui.on('icon:click', async () => {
+              try {
+                await window.miro.board.ui.openPanel({ url: 'index.html' });
+              } catch (err) {
+                console.debug('Miro panel open error:', err);
+              }
+            });
+          }
+
+          const boardInfoRes = await window.miro.board.getInfo();
+          if (boardInfoRes && boardInfoRes.id) {
+            setCustomSettings(prev => {
+              const updated = {
+                ...prev,
+                miroBoardId: prev.miroBoardId || boardInfoRes.id
+              };
+              try {
+                localStorage.setItem('omniarch_custom_settings', JSON.stringify(updated));
+              } catch (e) {}
+              return updated;
+            });
+            setBoardInfo(prev => ({
+              ...(prev || {}),
+              id: boardInfoRes.id,
+              name: boardInfoRes.title || 'Active Miro Board',
+              connected: true,
+              in_canvas: true
+            }));
+          }
+        }
+      } catch (err) {
+        console.debug('Miro Web SDK detection skipped:', err);
+      }
+    };
+    initMiroSDK();
   }, []);
 
   const toggleTheme = () => {

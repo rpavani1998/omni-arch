@@ -1,0 +1,19 @@
+{
+  "name": "OmniArch",
+  "description": "Universal Codebase to Miro Architecture Engine. Automatically analyzes software repositories with AI and maps editable architecture diagrams into Miro boards.",
+  "permissions": [
+    "boards:read",
+    "boards:write"
+  ],
+  "redirect_uris": [
+    "https://qwenarch-canvas.vercel.app",
+    "http://localhost:3000"
+  ],
+  "sdk_version": "v2",
+  "entry_point": "index.html",
+  "icon": "icon.svg",
+  "support": {
+    "url": "https://github.com/rpavani1998/qwen-arch-canvas",
+    "email": "support@omniarch.dev"
+  }
+}
