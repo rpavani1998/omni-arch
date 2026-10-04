@@ -8,16 +8,16 @@ from dotenv import load_dotenv
 
 try:
     from analyzer import CodebaseAnalyzer
-    from qwen_engine import QwenEngine
+    from engine import ArchitectureEngine
     from miro_client import MiroClient
 except ImportError:
     try:
         from api.analyzer import CodebaseAnalyzer
-        from api.qwen_engine import QwenEngine
+        from api.engine import ArchitectureEngine
         from api.miro_client import MiroClient
     except ImportError:
         from backend.analyzer import CodebaseAnalyzer
-        from backend.qwen_engine import QwenEngine
+        from backend.engine import ArchitectureEngine
         from backend.miro_client import MiroClient
 
 load_dotenv()
@@ -32,7 +32,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-qwen_engine = QwenEngine()
+engine = ArchitectureEngine()
+qwen_engine = engine
 miro_client = MiroClient()
 
 class AnalyzeRequest(BaseModel):
