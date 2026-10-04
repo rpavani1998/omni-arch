@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QwenArch — Pitch Deck Presentation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(18, 24, 38, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover: rgba(255, 255, 255, 0.12);
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-faint: #64748b;
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-indigo: #6366f1;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --font-heading: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-body);
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(99, 102, 241, 0.08) 0%, transparent 40%);
+    }
+
+    /* Top Progress Bar */
+    .progress-bar-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      z-index: 100;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan), var(--accent-indigo));
+      width: 10%;
+      transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+    }
+
+    /* Header Nav */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 36px;
+      z-index: 50;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: var(--font-heading);
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-badge {
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(59, 130, 246, 0.15);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .slide-counter {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.04);
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--card-border);
+    }
+
+    .btn-icon {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-icon:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: var(--card-hover);
+      color: #fff;
+    }
+
+    /* Deck Viewport */
+    .deck-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      height: calc(100vh - 120px);
+    }
+
+    .slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      padding: 24px 64px 32px;
+      opacity: 0;
+      visibility: hidden;
+      transform: scale(0.98) translateY(12px);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      transform: scale(1) translateY(0);
+    }
+
+    .slide-header {
+      margin-bottom: 24px;
+    }
+
+    .slide-category {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--accent-cyan);
+      margin-bottom: 6px;
+      display: inline-block;
+    }
+
+    .slide-title {
+      font-family: var(--font-heading);
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: #fff;
+      line-height: 1.15;
+    }
+
+    .slide-subtitle {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      max-width: 850px;
+      line-height: 1.5;
+    }
+
+    /* Grid Layouts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      height: calc(100% - 90px);
+      align-items: center;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    /* Glass Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 24px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .card:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    }
+
+    .card-title {
+      font-family: var(--font-heading);
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-desc {
+      font-size: 0.92rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    .pill-tag {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #cbd5e1;
+    }
+
+    /* Images & Media Frame */
+    .media-frame {
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      overflow: hidden;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+      background: #000;
+      position: relative;
+      height: 100%;
+      max-height: 480px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .media-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    /* Comparison Table */
+    .table-container {
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+
+    th {
+      background: rgba(255, 255, 255, 0.04);
+      padding: 14px 18px;
+      font-family: var(--font-heading);
+      font-weight: 700;
+      color: #e2e8f0;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    td {
+      padding: 13px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      color: var(--text-muted);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr.highlight-row {
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    tr.highlight-row td {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .badge-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--accent-emerald);
+      font-weight: 600;
+    }
+
+    .badge-cross {
+      color: var(--text-faint);
+    }
+
+    /* Bottom Footer / Controls */
+    footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 36px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      z-index: 50;
+      font-size: 0.85rem;
+      color: var(--text-faint);
+    }
+
+    .footer-keys {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .kbd {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: #cbd5e1;
+    }
+
+    .nav-buttons {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-nav {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--card-border);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-nav:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-nav.primary {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 16px rgba(59, 130, 246, 0.35);
+    }
+
+    .btn-nav.primary:hover {
+      background: #2563eb;
+    }
+
+    /* Pitch Track Quote Box */
+    .pitch-box {
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 14px;
+      padding: 28px 36px;
+      position: relative;
+      line-height: 1.7;
+      font-size: 1.12rem;
+      color: #e2e8f0;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+    }
+
+    .pitch-quote {
+      font-style: italic;
+    }
+
+    .pitch-highlight {
+      color: #60a5fa;
+      font-weight: 600;
+      font-style: normal;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Progress Bar -->
+  <div class="progress-bar-container">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="18" height="18" x="3" y="3" rx="2"/>
+        <path d="M9 3v18"/>
+        <path d="M15 9h6"/>
+        <path d="M15 15h6"/>
+      </svg>
+      <span>QwenArch</span>
+      <span class="brand-badge">Qwen 3.8-27B &times; Miro</span>
+    </div>
+
+    <div class="header-actions">
+      <div class="slide-counter" id="slideCounter">1 / 10</div>
+      <button class="btn-icon" onclick="toggleFullscreen()" title="Toggle Fullscreen (F)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Slide Deck Viewport -->
+  <main class="deck-container">
+
+    <!-- Slide 1: Title -->
+    <section class="slide active" id="slide-1">
+      <div class="grid-2">
+        <div>
+          <span class="slide-category">Project Presentation</span>
+          <h1 class="slide-title" style="font-size: 2.8rem; margin-bottom: 16px;">
+            Turn Invisible Code into <span style="background: linear-gradient(90deg, #60a5fa, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Living Architecture</span>
+          </h1>
+          <p class="slide-subtitle" style="font-size: 1.15rem; margin-bottom: 28px;">
+            Autonomous codebase reasoning powered by <strong>Qwen 3.8-27B</strong> rendered into an interactive, multi-perspective collaborative canvas synced to <strong>Miro</strong>.
+          </p>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <span class="pill-tag" style="background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3);">Qwen 3.8-27B LLM</span>
+            <span class="pill-tag" style="background: rgba(245, 158, 11, 0.15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.3);">Miro REST API v2</span>
+            <span class="pill-tag" style="background: rgba(16, 185, 129, 0.15); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.3);">7 Architecture Perspectives</span>
+            <span class="pill-tag" style="background: rgba(168, 85, 247, 0.15); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.3);">1-Click Vercel Deploy</span>
+          </div>
+        </div>
+        <div class="media-frame">
+          <img src="assets/screenshot_frosted_ui.png" alt="QwenArch UI" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 2: Problem -->
+    <section class="slide" id="slide-2">
+      <div class="slide-header">
+        <span class="slide-category">The Problem</span>
+        <h2 class="slide-title">Code Generation is Instant. Architecture Understanding is Broken.</h2>
+        <p class="slide-subtitle">AI coding assistants generate thousands of lines in minutes, creating unprecedented cognitive debt across every tier of developers.</p>
+      </div>
+      <div class="grid-3">
+        <div class="card" style="border-top: 3px solid var(--accent-rose);">
+          <div class="card-title">
+            <span style="color: var(--accent-rose);">01</span>
+            Vibe Coders & Solo Founders
+          </div>
+          <p class="card-desc">
+            Ship products at record speed with LLMs, but lack fullstack architectural visibility. When bugs or scaling limits hit, they can't trace the data flow or hidden bottlenecks.
+          </p>
+        </div>
+        <div class="card" style="border-top: 3px solid var(--accent-amber);">
+          <div class="card-title">
+            <span style="color: var(--accent-amber);">02</span>
+            Students & Learners
+          </div>
+          <p class="card-desc">
+            Opening real-world open-source repositories feels like staring at an incomprehensible wall of folders. They need intuitive visual mental models, not 200 open tabs.
+          </p>
+        </div>
+        <div class="card" style="border-top: 3px solid var(--accent-blue);">
+          <div class="card-title">
+            <span style="color: var(--accent-blue);">03</span>
+            Tech Leads & Architects
+          </div>
+          <p class="card-desc">
+            Manual diagrams in Draw.io or Lucidchart rot the instant a PR merges. Confluence wikis fall out of sync, leading to misaligned team decisions.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 3: Solution Pipeline -->
+    <section class="slide" id="slide-3">
+      <div class="slide-header">
+        <span class="slide-category">The Solution</span>
+        <h2 class="slide-title">QwenArch: Intelligent 3-Stage Pipeline</h2>
+        <p class="slide-subtitle">Bridging raw repository files to human visual collaboration with zero setup.</p>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title">
+            <span style="color: var(--accent-cyan);">Stage 1</span>
+            Smart Code Ingestion
+          </div>
+          <p class="card-desc">
+            Scans repo manifests (package.json, Dockerfile, docker-compose, requirements), API route definitions, database schemas, and entry points into a compact semantic context.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">
+            <span style="color: var(--accent-indigo);">Stage 2</span>
+            Qwen 3.8-27B Reasoning
+          </div>
+          <p class="card-desc">
+            Qwen performs deep structural deduction: identifying microservices, API gateways, database entities, auth boundaries, protocols (HTTP/gRPC/WSS), and risk hot-spots.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">
+            <span style="color: var(--accent-emerald);">Stage 3</span>
+            Dual-Canvas Projection
+          </div>
+          <p class="card-desc">
+            Renders instantly in a local interactive canvas and streams node positions, colors, directional connectors, and sticky executive summaries directly to a live Miro whiteboard.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 4: Miro Live Sync -->
+    <section class="slide" id="slide-4">
+      <div class="grid-2">
+        <div>
+          <span class="slide-category">Live Collaboration</span>
+          <h2 class="slide-title">Direct Sync to Miro Whiteboard</h2>
+          <p class="slide-subtitle" style="margin-bottom: 20px;">
+            Turns static code analysis into an editable whiteboard canvas for team design reviews, onboarding, and planning.
+          </p>
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 14px; color: var(--text-muted); font-size: 0.95rem;">
+            <li style="display: flex; gap: 10px; align-items: flex-start;">
+              <span style="color: var(--accent-blue); font-weight: 800;">&bull;</span>
+              <span><strong>Auto-Calculated Grid Layout</strong>: Multi-tier coordinate placement prevents overlapping nodes and chaotic lines.</span>
+            </li>
+            <li style="display: flex; gap: 10px; align-items: flex-start;">
+              <span style="color: var(--accent-indigo); font-weight: 800;">&bull;</span>
+              <span><strong>Semantic Color Coding</strong>: UI (Blue), Gateways (Purple), Services (Green), Databases (Amber), Cache (Red), Queues (Indigo).</span>
+            </li>
+            <li style="display: flex; gap: 10px; align-items: flex-start;">
+              <span style="color: var(--accent-emerald); font-weight: 800;">&bull;</span>
+              <span><strong>Executive Architecture Card</strong>: Auto-generates sticky notes summarizing strengths, risks, and scaling bottlenecks.</span>
+            </li>
+          </ul>
+        </div>
+        <div class="media-frame">
+          <img src="assets/screenshot_miro_board.png" alt="Miro Board Sync" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 5: Tailored for Everyone -->
+    <section class="slide" id="slide-5">
+      <div class="slide-header">
+        <span class="slide-category">Target Audience</span>
+        <h2 class="slide-title">Built for Everyone Who Touches Code</h2>
+        <p class="slide-subtitle">Tailored visual perspectives designed for varying technical depths.</p>
+      </div>
+      <div class="grid-4">
+        <div class="card">
+          <div class="card-title" style="font-size: 1.05rem;">Vibe Coders</div>
+          <p class="card-desc" style="font-size: 0.85rem;">
+            Get a high-level component map that explains what every generated service does without getting lost in implementation syntax.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title" style="font-size: 1.05rem;">Students & Beginners</div>
+          <p class="card-desc" style="font-size: 0.85rem;">
+            Learn how enterprise software connects by viewing step-by-step conceptual walkthroughs of large open source projects.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title" style="font-size: 1.05rem;">Tech Leads</div>
+          <p class="card-desc" style="font-size: 0.85rem;">
+            Review architectural pull requests, verify security boundaries, and spot single points of failure before production merges.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title" style="font-size: 1.05rem;">Product Managers</div>
+          <p class="card-desc" style="font-size: 0.85rem;">
+            Gain instant visibility into backend capabilities, data pipeline steps, and dependencies for sprint planning.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 6: Features & Perspectives -->
+    <section class="slide" id="slide-6">
+      <div class="slide-header">
+        <span class="slide-category">Core Capabilities</span>
+        <h2 class="slide-title">7 Architecture Perspectives + Custom Directives</h2>
+        <p class="slide-subtitle">Generate the exact diagram view needed for your specific context.</p>
+      </div>
+      <div class="grid-2" style="align-items: start; height: auto;">
+        <div class="card">
+          <div class="card-title" style="color: var(--accent-cyan);">7 Built-In Perspectives</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; font-size: 0.85rem; color: var(--text-muted);">
+            <div>&bull; End-to-End System Overview</div>
+            <div>&bull; Data Flow & Pipeline</div>
+            <div>&bull; Security & Auth Boundaries</div>
+            <div>&bull; Database & ER Relationships</div>
+            <div>&bull; API Endpoints & Routes</div>
+            <div>&bull; Vibe Coder High-Level Map</div>
+            <div>&bull; Student Learning Deep-Dive</div>
+            <div>&bull; Custom User Focus Directive</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title" style="color: var(--accent-indigo);">Interactive Custom Controls</div>
+          <p class="card-desc" style="margin-bottom: 12px;">
+            Guide Qwen's reasoning focus with prompt directives or one-click preset chips:
+          </p>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <span class="pill-tag">Show caching bottlenecks</span>
+            <span class="pill-tag">Trace JWT token auth</span>
+            <span class="pill-tag">Isolate third-party APIs</span>
+            <span class="pill-tag">Simplify for presentation</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 7: Differentiation -->
+    <section class="slide" id="slide-7">
+      <div class="slide-header">
+        <span class="slide-category">Competitive Edge</span>
+        <h2 class="slide-title">Beyond Static Markdown Charts</h2>
+        <p class="slide-subtitle">Why QwenArch surpasses legacy AST generators and single-purpose diagram tools.</p>
+      </div>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Capability</th>
+              <th>Mermaid Sync / Code2Chart</th>
+              <th>CodeBoarding / Diagrammer</th>
+              <th style="color: #60a5fa;">QwenArch (Ours)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="highlight-row">
+              <td>Live Miro Whiteboard Sync</td>
+              <td class="badge-cross">&cross; Static file only</td>
+              <td class="badge-cross">&cross; Web-only silo</td>
+              <td class="badge-check">&check; Live Interactive Miro Canvas</td>
+            </tr>
+            <tr>
+              <td>AI Reasoning Engine</td>
+              <td>Regex / Simple AST</td>
+              <td>Rule-based diffs</td>
+              <td class="badge-check">&check; Qwen 3.8-27B Deep LLM Reasoning</td>
+            </tr>
+            <tr class="highlight-row">
+              <td>Audience Adaptability</td>
+              <td>Devs only</td>
+              <td>PR Reviewers</td>
+              <td class="badge-check">&check; Vibe Coders, Learners, Leads & Execs</td>
+            </tr>
+            <tr>
+              <td>Custom Focus Directives</td>
+              <td class="badge-cross">&cross; Fixed output</td>
+              <td class="badge-cross">&cross; Fixed output</td>
+              <td class="badge-check">&check; 7 Perspectives + Custom Prompt Directives</td>
+            </tr>
+            <tr class="highlight-row">
+              <td>Deployment Flexibility</td>
+              <td>CLI / Script</td>
+              <td>Proprietary SaaS</td>
+              <td class="badge-check">&check; 1-Click Vercel Serverless + Local</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Slide 8: Tech Stack -->
+    <section class="slide" id="slide-8">
+      <div class="slide-header">
+        <span class="slide-category">Architecture</span>
+        <h2 class="slide-title">Modern Lightweight Tech Stack</h2>
+        <p class="slide-subtitle">Engineered for fast serverless execution and real-time streaming.</p>
+      </div>
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-title">Frontend</div>
+          <p class="card-desc">
+            &bull; React 18 + Vite SPA<br/>
+            &bull; Minimalist Titanium theme<br/>
+            &bull; Interactive SVG / DOM graph canvas<br/>
+            &bull; Server-Sent Events (SSE) stream parser
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">Backend & Serverless</div>
+          <p class="card-desc">
+            &bull; FastAPI async core<br/>
+            &bull; Vercel Python Serverless (<code style="font-size: 0.8rem;">api/index.py</code>)<br/>
+            &bull; Codebase AST & manifest extractor<br/>
+            &bull; Resilient JSON auto-repair
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">AI & Miro Integrations</div>
+          <p class="card-desc">
+            &bull; ModelScope API (Qwen 3.8-27B)<br/>
+            &bull; Local Ollama fallback<br/>
+            &bull; Miro REST API v2 connector engine<br/>
+            &bull; Hierarchical auto-layout calculator
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Slide 9: 60-Second Pitch Script -->
+    <section class="slide" id="slide-9">
+      <div class="slide-header">
+        <span class="slide-category">Presenter Talk Track</span>
+        <h2 class="slide-title">The 60-Second Meetup Pitch</h2>
+      </div>
+      <div class="pitch-box">
+        <p class="pitch-quote">
+          "How many of you have generated an entire project with AI in an afternoon, only to realize you can't visualize how all the moving pieces connect?<br/><br/>
+          Traditional diagram tools are either <span class="pitch-highlight">rigid AST scripts</span> that spit out unreadable spaghetti, or <span class="pitch-highlight">manual whiteboards</span> that take hours to draw and rot the moment a PR merges.<br/><br/>
+          <strong>QwenArch</strong> solves this by combining <strong>Qwen's deep code reasoning</strong> with <strong>Miro's infinite collaborative canvas</strong>. In one click, it ingests your codebase, reasons through your architecture from 7 distinct perspectives, and paints an interactive, editable whiteboard on Miro with zero setup.<br/><br/>
+          Whether you're a <span class="pitch-highlight">student learning an open-source project</span>, a <span class="pitch-highlight">vibe coder building your MVP</span>, or an <span class="pitch-highlight">engineering lead running a sprint review</span> — QwenArch turns invisible code into clear, collaborative visual thinking."
+        </p>
+      </div>
+    </section>
+
+    <!-- Slide 10: Conclusion & Links -->
+    <section class="slide" id="slide-10">
+      <div class="grid-2">
+        <div>
+          <span class="slide-category">Summary & Next Steps</span>
+          <h2 class="slide-title" style="font-size: 2.4rem; margin-bottom: 16px;">Ready to Explore</h2>
+          <p class="slide-subtitle" style="margin-bottom: 24px;">
+            Open source, extensible, and built for the next generation of AI-assisted developers.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 14px; font-size: 0.95rem;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="pill-tag" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd;">GitHub</span>
+              <a href="https://github.com/rpavani1998/qwen-arch-canvas" target="_blank" style="color: #60a5fa; text-decoration: none; font-weight: 600;">github.com/rpavani1998/qwen-arch-canvas &nearr;</a>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="pill-tag" style="background: rgba(245, 158, 11, 0.2); color: #fcd34d;">Live Miro Board</span>
+              <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.85rem;">https://miro.com/app/board/uXjVEekRCSA=/</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="pill-tag" style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7;">Deployment</span>
+              <span style="color: var(--text-muted);">Vercel Serverless Ready (<code style="color:#a7f3d0;">qwenarch-vercel.zip</code>)</span>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="border: 1px solid rgba(59, 130, 246, 0.3);">
+          <div class="card-title" style="color: #60a5fa;">Upcoming Roadmap</div>
+          <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; margin-top: 14px; font-size: 0.9rem; color: var(--text-muted);">
+            <li><strong>&bull; Bi-directional Sync</strong>: Edit whiteboard nodes on Miro to auto-generate backend boilerplate code.</li>
+            <li><strong>&bull; GitHub Action Bot</strong>: Automatically update Miro boards whenever PRs merge into main.</li>
+            <li><strong>&bull; Live Telemetry Overlay</strong>: View real-time traffic and error rates directly over Miro architecture nodes.</li>
+            <li><strong>&bull; AI Voice Walkthrough</strong>: Interactive audio guided tour for junior developers and students.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer Navigation -->
+  <footer>
+    <div class="footer-keys">
+      <span>Navigate: <span class="kbd">&larr;</span> <span class="kbd">&rarr;</span> or <span class="kbd">Space</span></span>
+      <span>Fullscreen: <span class="kbd">F</span></span>
+    </div>
+
+    <div class="nav-buttons">
+      <button class="btn-nav" id="btnPrev" onclick="prevSlide()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+        Previous
+      </button>
+      <button class="btn-nav primary" id="btnNext" onclick="nextSlide()">
+        Next
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+    let currentSlide = 0;
+
+    const progressBar = document.getElementById('progressBar');
+    const slideCounter = document.getElementById('slideCounter');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnNext = document.getElementById('btnNext');
+
+    function updateSlide(index) {
+      if (index < 0) index = 0;
+      if (index >= totalSlides) index = totalSlides - 1;
+
+      slides.forEach((slide, idx) => {
+        if (idx === index) {
+          slide.classList.add('active');
+        } else {
+          slide.classList.remove('active');
+        }
+      });
+
+      currentSlide = index;
+      progressBar.style.width = `${((currentSlide + 1) / totalSlides) * 100}%`;
+      slideCounter.textContent = `${currentSlide + 1} / ${totalSlides}`;
+
+      btnPrev.disabled = currentSlide === 0;
+      btnNext.innerHTML = currentSlide === totalSlides - 1 ? 
+        'Finish' : 
+        'Next <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>';
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides - 1) {
+        updateSlide(currentSlide + 1);
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 0) {
+        updateSlide(currentSlide - 1);
+      }
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        updateSlide(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        updateSlide(totalSlides - 1);
+      } else if (e.key.toLowerCase() === 'f') {
+        toggleFullscreen();
+      }
+    });
+
+    // Initialize
+    updateSlide(0);
+  </script>
+</body>
+</html>
