@@ -106,19 +106,15 @@ class MiroClient:
         end_id: str, 
         caption: str = "", 
         stroke_color: str = "#0284c7",
-        start_snap: str = "right",
-        end_snap: str = "left",
-        shape: str = "elbow"
-    ) -> Dict[str, Any]:
+        shape: str = "curved"
+    ) -> Optional[Dict[str, Any]]:
         url = f"{self.base_url}/boards/{self.board_id}/connectors"
         payload = {
             "startItem": {
-                "id": start_id,
-                "snapTo": start_snap
+                "id": start_id
             },
             "endItem": {
-                "id": end_id,
-                "snapTo": end_snap
+                "id": end_id
             },
             "shape": shape,
             "style": {
@@ -130,9 +126,52 @@ class MiroClient:
         if caption:
             payload["captions"] = [{"content": caption}]
 
-        resp = requests.post(url, headers=self.headers, json=payload)
-        resp.raise_for_status()
-        return resp.json()
+        try:
+            resp = requests.post(url, headers=self.headers, json=payload)
+            if resp.status_code in [200, 201]:
+                return resp.json()
+            else:
+                # If custom style failed, fallback to minimal standard payload
+                fallback_payload = {
+                    "startItem": {"id": start_id},
+                    "endItem": {"id": end_id},
+                    "shape": "curved"
+                }
+                f_resp = requests.post(url, headers=self.headers, json=fallback_payload)
+                if f_resp.status_code in [200, 201]:
+                    return f_resp.json()
+                print(f"[MiroClient] Connector error ({resp.status_code}): {resp.text}")
+                return None
+        except Exception as e:
+            print(f"[MiroClient] Connector exception: {e}")
+            return None
+
+    def create_frame(self, title: str, x: float, y: float, width: float, height: float) -> Optional[Dict[str, Any]]:
+        url = f"{self.base_url}/boards/{self.board_id}/frames"
+        payload = {
+            "data": {
+                "title": title
+            },
+            "position": {
+                "origin": "center",
+                "x": x,
+                "y": y
+            },
+            "geometry": {
+                "width": width,
+                "height": height
+            }
+        }
+        try:
+            resp = requests.post(url, headers=self.headers, json=payload)
+            if resp.status_code in [200, 201]:
+                return resp.json()
+            else:
+                print(f"[MiroClient] Frame notice ({resp.status_code}): {resp.text}")
+                return None
+        except Exception as e:
+            print(f"[MiroClient] Frame creation exception: {e}")
+            return None
 
     def create_sticky_note(self, content: str, x: float, y: float, color: str = "light_yellow", width: float = 280) -> Dict[str, Any]:
         url = f"{self.base_url}/boards/{self.board_id}/sticky_notes"
@@ -406,8 +445,6 @@ class MiroClient:
                     end_id=task["end_id"],
                     caption=task["caption"],
                     stroke_color=task["stroke_color"],
-                    start_snap=task["start_snap"],
-                    end_snap=task["end_snap"],
                     shape=task["shape"]
                 )
             except Exception as e:
