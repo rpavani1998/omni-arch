@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SYSTEM_PROMPT = """You are a Principal Software Architect and Visual System Design Expert powered by Qwen.
+SYSTEM_PROMPT = """You are a Principal Software Architect and Visual System Design Expert.
 Your task is to analyze a codebase (directory tree, key configuration manifests, routes, models, and service files) and generate a comprehensive, production-grade visual software architecture diagram specification in STRICT JSON format.
 
 Your JSON output must have the following exact schema:
@@ -441,3 +441,7 @@ class QwenEngine:
                 "recommendations": ["Introduce caching layer"]
             }
         }
+
+# Universal Engine Aliases for multi-model architecture synthesis
+ArchitectureEngine = QwenEngine
+OmniEngine = QwenEngine

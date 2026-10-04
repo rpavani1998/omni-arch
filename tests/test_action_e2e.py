@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 from backend.analyzer import analyze_codebase
-from backend.qwen_engine import QwenEngine
+from backend.engine import ArchitectureEngine
 from backend.miro_client import MiroClient
 
 class TestActionE2E(unittest.TestCase):
@@ -19,12 +19,12 @@ class TestActionE2E(unittest.TestCase):
         codebase_data = analyze_codebase(source_type="local", source_value=os.path.join(os.getcwd(), "backend"))
         self.assertIn("file_tree", codebase_data)
 
-        # 3. Synthesize fallback architecture
-        engine = QwenEngine()
+        # 3. Synthesize architecture using universal ArchitectureEngine
+        engine = ArchitectureEngine()
         arch_data = engine._get_fallback()
         self.assertIn("nodes", arch_data)
 
-        # 4. Sync to Miro
+        # 4. Synchronize multi-tier visual layout into Miro board
         client = MiroClient(access_token="mock_token", board_id="test_board_id")
         sync_res = client.sync_architecture_diagram(arch_data=arch_data, perspective="overview")
 
