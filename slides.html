@@ -1036,55 +1036,35 @@
       </div>
     </section>
 
-    <!-- Slide 9: 60-Second Meetup Pitch Script -->
-    <section class="slide" id="slide-9" data-notes="Here is your exact 60-second pitch script for the meetup demo. Focus on the contrast between building code blindly with AI versus having live visual collaborative architecture on Miro.">
-      <div>
-        <span class="slide-badge">Presenter Talk Track</span>
-        <h2 class="slide-heading">The 60-Second Demo Pitch</h2>
-      </div>
-      <div class="talk-track-container">
-        <p class="talk-track-quote">
-          <span class="cue-pill">Hook</span> "How many of you have built an entire project with AI in an afternoon, only to realize you can't visualize how all the generated pieces fit together?<br/><br/>
-          <span class="cue-pill">Contrast</span> Traditional tools spit out unreadable static AST spaghetti, while manual whiteboards take hours to draw and rot the moment a PR merges.<br/><br/>
-          <span class="cue-pill">Reveal</span> <strong>QwenArch</strong> solves this by pairing <strong>Qwen's deep code reasoning</strong> with <strong>Miro's infinite collaborative whiteboard</strong>. In one click, it ingests your repository, reasons through your architecture from 7 distinct perspectives, and paints an interactive, editable whiteboard on Miro with zero configuration.<br/><br/>
-          <span class="cue-pill">Closing</span> Whether you're a <span class="talk-track-accent">student learning open-source</span>, a <span class="talk-track-accent">vibe coder building an MVP</span>, or an <span class="talk-track-accent">engineering lead running a sprint review</span> — QwenArch turns invisible code into clear, collaborative visual thinking."
-        </p>
-      </div>
-    </section>
-
-    <!-- Slide 10: Conclusion & Roadmap -->
-    <section class="slide" id="slide-10" data-notes="To wrap up: QwenArch is live, open-source on GitHub, and ready for deployment. On our roadmap: bi-directional sync where you edit Miro shapes to generate backend code, a GitHub Action PR bot, and live telemetry overlays. Thank you! Let's jump to the live demo!">
+    <!-- Slide 9: Live Demo & Links -->
+    <section class="slide" id="slide-9" data-notes="Thank you everyone! Let's now jump straight into the live interactive demo. We'll scan a repository and watch Qwen reason and paint the live whiteboard canvas on Miro in real-time.">
       <div class="split-layout">
         <div>
-          <span class="slide-badge">The Future</span>
-          <h2 class="slide-heading" style="font-size: 2.5rem; margin-bottom: 14px;">Ready for Live Demo</h2>
+          <span class="slide-badge">Live Demonstration</span>
+          <h2 class="slide-heading" style="font-size: 2.6rem; margin-bottom: 14px;">Let's See It In Action</h2>
           <p class="slide-desc" style="margin-bottom: 24px;">
-            Open source, extensible, and built for the next generation of AI-assisted developers.
+            Open source, zero setup, and ready to turn invisible code into living architecture.
           </p>
-          <div style="display: flex; flex-direction: column; gap: 14px; font-size: 0.95rem;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <span class="pill-item accent-blue">GitHub Repo</span>
+          <div style="display: flex; flex-direction: column; gap: 16px; font-size: 0.98rem;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span class="pill-item accent-blue" style="padding: 6px 12px; font-size: 0.82rem;">GitHub Repo</span>
               <a href="https://github.com/rpavani1998/qwen-arch-canvas" target="_blank" style="color: #60a5fa; text-decoration: none; font-weight: 600;">github.com/rpavani1998/qwen-arch-canvas &nearr;</a>
             </div>
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <span class="pill-item accent-amber">Live Miro Board</span>
-              <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.85rem;">https://miro.com/app/board/uXjVEekRCSA=/</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <span class="pill-item accent-emerald">Vercel Package</span>
-              <span style="color: var(--text-muted);"><code style="color:#a7f3d0;">qwenarch-vercel.zip</code> (1-Click Serverless)</span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span class="pill-item accent-amber" style="padding: 6px 12px; font-size: 0.82rem;">Live Miro Board</span>
+              <a href="https://miro.com/app/board/uXjVEekRCSA=/" target="_blank" style="color: #fcd34d; text-decoration: none; font-family: var(--font-mono); font-size: 0.88rem;">miro.com/app/board/uXjVEekRCSA=/ &nearr;</a>
             </div>
           </div>
         </div>
 
         <div class="glass-card" style="border: 1px solid rgba(59, 130, 246, 0.35);">
-          <div class="card-title-lg" style="color: #60a5fa;">Upcoming Product Roadmap</div>
-          <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; margin-top: 14px; font-size: 0.9rem; color: var(--text-muted);">
-            <li><strong>&bull; Bi-directional Canvas Sync</strong>: Drag shapes on Miro to scaffold backend API routes and schemas.</li>
-            <li><strong>&bull; GitHub Action PR Bot</strong>: Automatically update Miro boards whenever code merges to main.</li>
-            <li><strong>&bull; Live Telemetry Overlay</strong>: View real-time traffic and error rates directly on Miro nodes.</li>
-            <li><strong>&bull; AI Voice Walkthrough</strong>: Interactive audio guided tour for junior developers and students.</li>
-          </ul>
+          <div class="card-title-lg" style="color: #60a5fa; margin-bottom: 16px;">Key Takeaways</div>
+          <div style="display: flex; flex-direction: column; gap: 14px; font-size: 0.92rem; color: var(--text-muted); line-height: 1.6;">
+            <div>&bull; <strong style="color: #fff;">Autonomous Ingestion</strong>: Reads real repos, routes, and database schemas with zero configuration.</div>
+            <div>&bull; <strong style="color: #fff;">Deep Qwen 3.8-27B Reasoning</strong>: Extracts accurate microservices, dependencies, and risk callouts.</div>
+            <div>&bull; <strong style="color: #fff;">Instant Miro Canvas Sync</strong>: Auto-creates structured cards, color-coded layers, and executive summary notes.</div>
+            <div>&bull; <strong style="color: #fff;">7 Adaptable Perspectives</strong>: Built for vibe coders, learners, tech leads, and product teams.</div>
+          </div>
         </div>
       </div>
     </section>
