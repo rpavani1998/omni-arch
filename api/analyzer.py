@@ -149,3 +149,13 @@ class CodebaseAnalyzer:
                 shutil.rmtree(temp_dir, ignore_errors=True)
             except Exception:
                 pass
+
+def analyze_codebase(source_type: str, source_value: str) -> Dict[str, Any]:
+    """Helper function to analyze codebase either from local path or GitHub URL."""
+    if source_type == "github":
+        return CodebaseAnalyzer.fetch_github_repo(source_value)
+    else:
+        res = CodebaseAnalyzer.scan_directory(source_value)
+        res["source_type"] = "local"
+        res["source_value"] = source_value
+        return res

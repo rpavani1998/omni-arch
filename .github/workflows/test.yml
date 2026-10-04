@@ -1,0 +1,49 @@
+name: Test Suite & Marketplace Validation
+
+on:
+  push:
+    branches: [ main, master, feature/** ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  run-tests:
+    name: Backend Unit & E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install requests python-dotenv openai
+
+      - name: Run Python Test Suite
+        run: |
+          python -m unittest discover -s tests -v
+
+  validate-action:
+    name: Validate action.yml Schema
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Validate action.yml
+        run: |
+          python -c "
+          import os
+          assert os.path.exists('action.yml'), 'action.yml missing'
+          with open('action.yml') as f:
+              content = f.read()
+              assert 'name:' in content, 'Missing name in action.yml'
+              assert 'branding:' in content, 'Missing branding in action.yml'
+              assert 'inputs:' in content, 'Missing inputs in action.yml'
+              assert 'runs:' in content, 'Missing runs block in action.yml'
+          print('[OK] action.yml schema valid')
+          "
