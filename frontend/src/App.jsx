@@ -134,7 +134,7 @@ export default function App() {
   });
 
   const [activeTab, setActiveTab] = useState('github'); // 'github' | 'local' | 'prompt'
-  const [githubUrl, setGithubUrl] = useState('https://github.com/rpavani1998/PIPNetFusion');
+  const [githubUrl, setGithubUrl] = useState('');
   const [localPath, setLocalPath] = useState('');
   const [promptText, setPromptText] = useState('');
   const [selectedPerspective, setSelectedPerspective] = useState('overview');
@@ -583,7 +583,7 @@ export default function App() {
               <input
                 type="text"
                 className="text-input"
-                placeholder="/Users/pavanirajula/Files/my-project"
+                placeholder="/path/to/your/project"
                 value={localPath}
                 onChange={(e) => setLocalPath(e.target.value)}
               />
