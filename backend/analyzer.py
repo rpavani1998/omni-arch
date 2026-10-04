@@ -1,9 +1,12 @@
 import os
 import shutil
 import tempfile
+import io
+import zipfile
+import re
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-import git
+import requests
 
 IGNORED_DIRS = {
     "node_modules", ".git", ".next", "dist", "build", "__pycache__",
@@ -94,16 +97,48 @@ class CodebaseAnalyzer:
 
     @staticmethod
     def clone_and_scan_github(repo_url: str) -> Dict[str, Any]:
-        """Clones a GitHub repository shallowly and scans its structure."""
+        """Clones or downloads a GitHub repository and scans its structure."""
         temp_dir = tempfile.mkdtemp(prefix="qwen_repo_")
         try:
-            # Clean url
-            clean_url = repo_url.strip()
-            if not clean_url.endswith(".git") and not clean_url.endswith("/"):
-                clean_url = clean_url + ".git"
+            clean_url = repo_url.strip().rstrip("/")
+            if clean_url.endswith(".git"):
+                clean_url = clean_url[:-4]
 
-            git.Repo.clone_from(clean_url, temp_dir, depth=1)
-            result = CodebaseAnalyzer.scan_directory(temp_dir)
+            # Parse GitHub owner/repo: e.g. https://github.com/owner/repo
+            match = re.search(r"github\.com/([^/]+)/([^/]+)", clean_url)
+            downloaded = False
+
+            if match:
+                owner, repo = match.group(1), match.group(2)
+                # Try downloading zip archive directly (works on serverless without git CLI)
+                for branch in ["main", "master"]:
+                    zip_url = f"https://github.com/{owner}/{repo}/archive/refs/heads/{branch}.zip"
+                    try:
+                        resp = requests.get(zip_url, headers={"User-Agent": "QwenArch-Scanner"}, timeout=15)
+                        if resp.status_code == 200:
+                            with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
+                                z.extractall(temp_dir)
+                            downloaded = True
+                            break
+                    except Exception:
+                        pass
+
+            # Fallback to git clone if zip download failed and git is installed
+            if not downloaded:
+                try:
+                    import subprocess
+                    clone_target = clean_url + ".git"
+                    subprocess.run(["git", "clone", "--depth", "1", clone_target, temp_dir], check=True, capture_output=True, timeout=30)
+                    downloaded = True
+                except Exception as e:
+                    if not downloaded:
+                        raise RuntimeError(f"Could not clone or download repository '{repo_url}': {e}")
+
+            # Find the actual root directory (if extracted from zip, it will be inside a subfolder like repo-main)
+            subdirs = [os.path.join(temp_dir, d) for d in os.listdir(temp_dir) if os.path.isdir(os.path.join(temp_dir, d))]
+            scan_target = subdirs[0] if len(subdirs) == 1 and not (Path(temp_dir) / "package.json").exists() else temp_dir
+
+            result = CodebaseAnalyzer.scan_directory(scan_target)
             result["repo_url"] = repo_url
             return result
         finally:
