@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="omniGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="24" fill="#0f172a" />
+  <rect x="2" y="2" width="96" height="96" rx="22" fill="none" stroke="#334155" stroke-width="2" />
+  <!-- Central Architecture Grid / Layers -->
+  <path d="M50 20 L80 35 L50 50 L20 35 Z" fill="url(#omniGrad)" />
+  <path d="M20 48 L50 63 L80 48" fill="none" stroke="#38bdf8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+  <path d="M20 62 L50 77 L80 62" fill="none" stroke="#38bdf8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
