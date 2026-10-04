@@ -14,7 +14,7 @@ Your JSON output must have the following exact schema:
 {
   "system_title": "Descriptive System Name",
   "summary": "2-3 sentence executive overview of the architecture and data flow.",
-  "architecture_style": "e.g., Modular Monolith, Microservices, Clean Architecture, Event-Driven, 3-Tier Web App",
+  "architecture_style": "e.g., Modular Monolith, Microservices, Clean Architecture, Event-Driven, ML Research Pipeline",
   "tech_stack": ["Tech1", "Tech2", "Tech3"],
   "layers": [
     {
@@ -49,7 +49,7 @@ Your JSON output must have the following exact schema:
       "name": "Component Name",
       "layer_id": "layer_presentation | layer_gateway | layer_services | layer_data | layer_external",
       "type": "frontend | gateway | service | database | cache | queue | external",
-      "tech": "e.g. React 19, FastAPI, PostgreSQL, Redis",
+      "tech": "e.g. React 19, FastAPI, PostgreSQL, PyTorch, Redis",
       "description": "Clear explanation of this component's role.",
       "endpoints_or_features": ["Feature or endpoint 1", "Feature or endpoint 2"]
     }
@@ -58,8 +58,8 @@ Your JSON output must have the following exact schema:
     {
       "from": "source_node_id",
       "to": "target_node_id",
-      "protocol": "e.g. REST / HTTPS, gRPC, SQL Query, WebSocket, Pub/Sub",
-      "label": "Short description of interaction (e.g. User Auth, Sync Cart, Stream Events)"
+      "protocol": "e.g. REST / HTTPS, gRPC, SQL Query, WebSocket, Pub/Sub, Python API",
+      "label": "Short description of interaction (e.g. User Auth, Sync Cart, Train Pipeline)"
     }
   ],
   "insights": {
@@ -70,10 +70,10 @@ Your JSON output must have the following exact schema:
 }
 
 Rules:
-1. Return ONLY the raw valid JSON object. Do not include markdown codeblocks, preamble, or conversational commentary.
-2. Every node in "connections" MUST reference a valid "id" present in "nodes".
-3. Group nodes logically into the appropriate layer_id.
-4. Ensure realistic, detailed components reflecting the scanned codebase.
+1. Output ONLY the raw valid JSON object starting with { and ending with }. Do NOT write markdown prose or long monologue before the JSON.
+2. Adapt intelligently to any architecture: for web/microservices use web tiers; for ML/research pipelines map notebooks/dashboards to presentation, CLI/SLURM to gateway, models/training/eval to services, datasets/checkpoints/scoresheets to data, and HPC/GPUs/frameworks to external.
+3. Every node in "connections" MUST reference a valid "id" present in "nodes".
+4. Group all nodes into the appropriate layer_id from the 5 standard layers.
 """
 
 PERSPECTIVE_DIRECTIVES = {
@@ -144,7 +144,7 @@ class QwenEngine:
                     {"role": "user", "content": user_message}
                 ],
                 temperature=0.2,
-                max_tokens=2500,
+                max_tokens=4096,
                 stream=True
             )
 
@@ -166,8 +166,8 @@ class QwenEngine:
 
             # Parse the final JSON from either content or reasoning stream
             duration_ms = int((time.time() - start_time) * 1000)
-            json_source = full_content if "{" in full_content else (full_reasoning if "{" in full_reasoning else full_content)
-            parsed_json = self._parse_json_response(json_source)
+            combined_text = full_content + "\n" + full_reasoning
+            parsed_json = self._parse_json_response(combined_text)
 
             # Fallback reasoning if model didn't stream explicit reasoning
             if not full_reasoning:
@@ -210,7 +210,7 @@ class QwenEngine:
 
         if provider.startswith("modelscope") or (provider == "auto" and modelscope_key):
             try:
-                target_model = "Qwen/Qwen2.5-7B-Instruct" if provider == "modelscope-fast" else self.modelscope_model
+                target_model = self.modelscope_model
                 print(f"[QwenEngine] Invoking ModelScope ({target_model})...")
                 client = OpenAI(base_url=self.modelscope_base, api_key=modelscope_key)
                 resp = client.chat.completions.create(
@@ -220,7 +220,7 @@ class QwenEngine:
                         {"role": "user", "content": user_content}
                     ],
                     temperature=0.2,
-                    max_tokens=1500
+                    max_tokens=4096
                 )
                 msg = resp.choices[0].message
                 content = msg.content or ""
@@ -234,8 +234,7 @@ class QwenEngine:
                         content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
 
                 if not reasoning_text:
-                    # Synthesize architectural reasoning summary from the analysis
-                    reasoning_text = f"1. Ingress & Routing Analysis: Evaluated API gateways, load balancing, and client ingress points.\n2. Domain Decomposition: Identified core microservices/modules, business logic boundaries, and service responsibilities.\n3. Data Flow & State: Mapped persistence tiers (SQL/NoSQL/Vector DBs), caching strategies, and event streaming.\n4. Scalability & Resilience: Assessed asynchronous event queues, service coupling, and performance bottlenecks."
+                    reasoning_text = f"1. Ingress & Routing Analysis: Evaluated API gateways and entrypoints.\n2. Domain Decomposition: Identified core microservices/modules.\n3. Data Flow & State: Mapped persistence tiers and storage.\n4. Scalability & Resilience: Assessed coupling and bottlenecks."
 
                 usage = {
                     "prompt_tokens": getattr(resp.usage, "prompt_tokens", 0) if resp.usage else 0,
@@ -246,7 +245,8 @@ class QwenEngine:
                     "reasoning": reasoning_text
                 }
                 print(f"[QwenEngine] ModelScope response: {usage['total_tokens']} tokens, reasoning: {len(reasoning_text)} chars")
-                return content, usage
+                # Return both content and reasoning so parser has full access
+                return content if content.strip() else reasoning_text, usage
             except Exception as e:
                 print(f"[QwenEngine] ModelScope call error ({e}), falling back to Ollama...")
 
@@ -259,7 +259,8 @@ class QwenEngine:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_content}
             ],
-            temperature=0.2
+            temperature=0.2,
+            max_tokens=4096
         )
         msg = resp.choices[0].message
         content = msg.content or ""
@@ -271,7 +272,7 @@ class QwenEngine:
                 content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
 
         if not reasoning_text:
-            reasoning_text = f"1. Ingress & Routing Analysis: Evaluated API gateways, load balancing, and client ingress points.\n2. Domain Decomposition: Identified core microservices/modules, business logic boundaries, and service responsibilities.\n3. Data Flow & State: Mapped persistence tiers (SQL/NoSQL/Vector DBs), caching strategies, and event streaming.\n4. Scalability & Resilience: Assessed asynchronous event queues, service coupling, and performance bottlenecks."
+            reasoning_text = f"1. Ingress & Routing Analysis: Evaluated API gateways and entrypoints.\n2. Domain Decomposition: Identified core microservices/modules.\n3. Data Flow & State: Mapped persistence tiers and storage.\n4. Scalability & Resilience: Assessed coupling and bottlenecks."
 
         usage = {
             "prompt_tokens": getattr(resp.usage, "prompt_tokens", 0) if resp.usage else 0,
@@ -281,29 +282,59 @@ class QwenEngine:
             "provider": "Local Ollama",
             "reasoning": reasoning_text
         }
-        return content, usage
+        return content if content.strip() else reasoning_text, usage
 
     def _parse_json_response(self, text: str) -> Dict[str, Any]:
-        """Cleans and extracts JSON safely from model response."""
+        """Cleans, extracts, and repairs JSON safely from model response."""
         cleaned = text.strip()
         
         # Remove markdown codeblock syntax if present
-        if cleaned.startswith("```"):
-            cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
-            cleaned = re.sub(r"\n?```$", "", cleaned)
-            cleaned = cleaned.strip()
+        if "```" in cleaned:
+            match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
+            if match:
+                cleaned = match.group(1)
+            else:
+                cleaned = re.sub(r"```(?:json)?", "", cleaned)
+                cleaned = cleaned.replace("```", "").strip()
 
         # Find first { and last }
         start_idx = cleaned.find("{")
         end_idx = cleaned.rfind("}")
+        
         if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
             json_str = cleaned[start_idx:end_idx + 1]
             try:
-                return json.loads(json_str)
-            except json.JSONDecodeError as e:
-                print(f"[QwenEngine] JSON parsing failed: {e}")
-                
-        # Return fallback structure if parsing failed
+                parsed = json.loads(json_str)
+                if isinstance(parsed, dict) and "nodes" in parsed and len(parsed["nodes"]) > 0:
+                    return parsed
+            except Exception:
+                pass
+
+            # Try cleaning trailing commas
+            cleaned_commas = re.sub(r",\s*([\]}])", r"\1", json_str)
+            try:
+                parsed = json.loads(cleaned_commas)
+                if isinstance(parsed, dict) and "nodes" in parsed:
+                    return parsed
+            except Exception:
+                pass
+
+        # If start_idx exists but end_idx is cut off, attempt auto-closing JSON
+        if start_idx != -1:
+            partial_json = cleaned[start_idx:]
+            # Attempt to balance brackets
+            open_braces = partial_json.count("{") - partial_json.count("}")
+            open_brackets = partial_json.count("[") - partial_json.count("]")
+            repaired = partial_json.rstrip().rstrip(",") + ("]" * max(0, open_brackets)) + ("}" * max(0, open_braces))
+            repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
+            try:
+                parsed = json.loads(repaired)
+                if isinstance(parsed, dict) and "nodes" in parsed and len(parsed["nodes"]) > 0:
+                    return parsed
+            except Exception:
+                pass
+
+        # Return fallback structure only as last resort
         return {
             "system_title": "Analyzed Codebase Architecture",
             "summary": "Architecture extracted from scanned source files.",
