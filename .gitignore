@@ -3,6 +3,9 @@
 .env.local
 .env.*.local
 *.env
+installations.json
+test_installations.json
+
 
 # Dependencies & Package Managers
 node_modules/

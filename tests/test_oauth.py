@@ -46,5 +46,16 @@ class TestOAuth(unittest.TestCase):
         self.assertTrue(self.store.delete_installation(team_id))
         self.assertIsNone(self.store.get_installation(team_id))
 
+    def test_kv_storage_adapter(self):
+        # Test KV REST backend simulation
+        os.environ["KV_REST_API_URL"] = "https://mock-kv.upstash.io"
+        os.environ["KV_REST_API_TOKEN"] = "mock_token"
+        kv_store = MultiTenantInstallationStore()
+        self.assertTrue(kv_store.is_kv_enabled())
+        # Clean up env
+        del os.environ["KV_REST_API_URL"]
+        del os.environ["KV_REST_API_TOKEN"]
+
 if __name__ == "__main__":
     unittest.main()
+

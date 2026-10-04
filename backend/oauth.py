@@ -9,18 +9,40 @@ from pathlib import Path
 
 logger = logging.getLogger("omniarch.oauth")
 
-# In-memory and persistent multi-tenant installation repository
+# Multi-tenant installation repository supporting Vercel KV, Upstash Redis, and Local File storage
 class MultiTenantInstallationStore:
     """
     Multi-tenant repository for managing Miro Marketplace OAuth2 app installations.
-    Stores team installations, access tokens, refresh tokens, and authorized scopes.
+    Supports:
+    - Vercel KV / Upstash Redis REST API (KV_REST_API_URL, KV_REST_API_TOKEN, UPSTASH_REDIS_REST_URL)
+    - Persistent local JSON file fallback for dev/testing
     """
     def __init__(self, storage_file: Optional[str] = None):
         self.storage_file = storage_file or os.getenv("INSTALLATION_STORE_PATH", "installations.json")
+        self.kv_url = os.getenv("KV_REST_API_URL") or os.getenv("UPSTASH_REDIS_REST_URL")
+        self.kv_token = os.getenv("KV_REST_API_TOKEN") or os.getenv("UPSTASH_REDIS_REST_TOKEN")
         self._installations: Dict[str, Dict[str, Any]] = {}
-        self._load()
+        if not self.is_kv_enabled():
+            self._load_local()
 
-    def _load(self):
+    def is_kv_enabled(self) -> bool:
+        return bool(self.kv_url and self.kv_token)
+
+    def _kv_request(self, command: list) -> Optional[Any]:
+        if not self.is_kv_enabled():
+            return None
+        try:
+            url = f"{self.kv_url.rstrip('/')}/"
+            headers = {"Authorization": f"Bearer {self.kv_token}"}
+            resp = requests.post(url, headers=headers, json=command, timeout=5)
+            if resp.status_code == 200:
+                return resp.json().get("result")
+            logger.warning(f"KV command failed with status {resp.status_code}: {resp.text}")
+        except Exception as e:
+            logger.error(f"Error querying KV storage: {e}")
+        return None
+
+    def _load_local(self):
         try:
             path = Path(self.storage_file)
             if path.exists():
@@ -30,12 +52,12 @@ class MultiTenantInstallationStore:
             logger.warning(f"Could not load installations from {self.storage_file}: {e}")
             self._installations = {}
 
-    def _save(self):
+    def _save_local(self):
         try:
             with open(self.storage_file, "w", encoding="utf-8") as f:
                 json.dump(self._installations, f, indent=2)
         except Exception as e:
-            logger.error(f"Failed to persist installations: {e}")
+            logger.error(f"Failed to persist installations locally: {e}")
 
     def save_installation(self, team_id: str, data: Dict[str, Any]) -> None:
         """Saves or updates an authorized Miro workspace installation."""
@@ -51,15 +73,44 @@ class MultiTenantInstallationStore:
             "expires_in": data.get("expires_in", 3600),
             "expires_at": time.time() + data.get("expires_in", 3600)
         }
-        self._installations[team_id] = record
-        self._save()
-        logger.info(f"Saved OAuth installation for team_id: {team_id}")
+        
+        if self.is_kv_enabled():
+            self._kv_request(["SET", f"omniarch:inst:{team_id}", json.dumps(record)])
+            self._kv_request(["SADD", "omniarch:installations:teams", team_id])
+            logger.info(f"Saved OAuth installation to KV for team_id: {team_id}")
+        else:
+            self._installations[team_id] = record
+            self._save_local()
+            logger.info(f"Saved OAuth installation to local store for team_id: {team_id}")
 
     def get_installation(self, team_id: str) -> Optional[Dict[str, Any]]:
+        if self.is_kv_enabled():
+            val = self._kv_request(["GET", f"omniarch:inst:{team_id}"])
+            if val:
+                try:
+                    return json.loads(val) if isinstance(val, str) else val
+                except Exception:
+                    return None
+            return None
         return self._installations.get(team_id)
 
     def list_installations(self) -> Dict[str, Dict[str, Any]]:
-        # Return sanitized copy (no raw refresh tokens exposed)
+        result = {}
+        if self.is_kv_enabled():
+            teams = self._kv_request(["SMEMBERS", "omniarch:installations:teams"]) or []
+            for t in teams:
+                inst = self.get_installation(t)
+                if inst:
+                    result[t] = {
+                        "team_id": inst.get("team_id"),
+                        "user_id": inst.get("user_id"),
+                        "scope": inst.get("scope"),
+                        "installed_at": inst.get("installed_at"),
+                        "expires_at": inst.get("expires_at")
+                    }
+            return result
+
+        # Return sanitized copy from local store (no raw refresh tokens exposed)
         return {
             k: {
                 "team_id": v.get("team_id"),
@@ -72,15 +123,22 @@ class MultiTenantInstallationStore:
         }
 
     def delete_installation(self, team_id: str) -> bool:
-        if team_id in self._installations:
-            del self._installations[team_id]
-            self._save()
-            logger.info(f"Removed OAuth installation for team_id: {team_id}")
+        if self.is_kv_enabled():
+            self._kv_request(["DEL", f"omniarch:inst:{team_id}"])
+            self._kv_request(["SREM", "omniarch:installations:teams", team_id])
+            logger.info(f"Removed OAuth installation from KV for team_id: {team_id}")
             return True
-        return False
+        else:
+            if team_id in self._installations:
+                del self._installations[team_id]
+                self._save_local()
+                logger.info(f"Removed OAuth installation from local store for team_id: {team_id}")
+                return True
+            return False
 
 
 installation_store = MultiTenantInstallationStore()
+
 
 
 class MiroOAuthManager:

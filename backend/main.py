@@ -137,8 +137,9 @@ def get_board_info(access_token: Optional[str] = None, board_id: Optional[str] =
         inst = installation_store.get_installation(t_id) if t_id else None
         token = (req.access_token if req else None) or access_token or (inst.get("access_token") if inst else None)
         b_id = (req.board_id if req else None) or board_id
-        client = MiroClient(access_token=token, board_id=b_id) if (token or b_id) else miro_client
+        client = MiroClient(access_token=token, board_id=b_id, team_id=t_id) if (token or b_id) else miro_client
         info = client.get_board_info()
+
         return {
             "success": True,
             "board_id": info.get("id"),
@@ -259,7 +260,7 @@ def sync_to_miro(req: SyncMiroRequest):
     try:
         inst = installation_store.get_installation(req.team_id) if req.team_id else None
         token = req.access_token or (inst.get("access_token") if inst else None)
-        client = MiroClient(access_token=token, board_id=req.board_id) if (token or req.board_id) else miro_client
+        client = MiroClient(access_token=token, board_id=req.board_id, team_id=req.team_id) if (token or req.board_id) else miro_client
         res = client.sync_architecture_diagram(
             arch_data=req.architecture,
             start_x=req.offset_x or -300,
@@ -274,6 +275,7 @@ def sync_to_miro(req: SyncMiroRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 from fastapi.responses import RedirectResponse
+from fastapi import Request
 
 @router.get("/oauth/authorize")
 def oauth_authorize(team_id: Optional[str] = None, redirect: bool = False):
@@ -301,6 +303,35 @@ def list_installations():
 def delete_installation(team_id: str):
     success = installation_store.delete_installation(team_id)
     return {"success": success}
+
+class UninstallPayload(BaseModel):
+    team_id: Optional[str] = None
+    user_id: Optional[str] = None
+    event: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
+
+@router.post("/oauth/uninstall")
+@router.post("/oauth/webhook")
+async def oauth_uninstall_webhook(request: Request):
+    """
+    Handles Miro Marketplace app uninstall webhook.
+    Revokes credentials and cleans up multi-tenant installation storage.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    team_id = body.get("team_id") or (body.get("data", {}).get("team_id") if isinstance(body.get("data"), dict) else None)
+    if not team_id:
+        # Check query params fallback
+        team_id = request.query_params.get("team_id")
+
+    if team_id:
+        installation_store.delete_installation(str(team_id))
+        return {"success": True, "message": f"Installation revoked for team {team_id}"}
+    return {"success": True, "message": "Webhook processed"}
+
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse

@@ -50,7 +50,8 @@ TYPE_STYLES = {
 }
 
 class MiroClient:
-    def __init__(self, access_token: Optional[str] = None, board_id: Optional[str] = None):
+    def __init__(self, access_token: Optional[str] = None, board_id: Optional[str] = None, team_id: Optional[str] = None):
+        self.team_id = team_id
         self.access_token = access_token or os.getenv("MIRO_ACCESS_TOKEN", "")
         self.board_id = board_id or os.getenv("MIRO_BOARD_ID", "")
         self.base_url = "https://api.miro.com/v2"
@@ -63,9 +64,37 @@ class MiroClient:
             "Accept": "application/json"
         }
 
+    def _request(self, method: str, url: str, **kwargs) -> requests.Response:
+        """Executes HTTP request with automatic token refresh on 401 Unauthorized."""
+        headers = kwargs.pop("headers", None) or self.headers
+        fn = getattr(requests, method.lower(), None)
+        if fn is not None:
+            resp = fn(url, headers=headers, **kwargs)
+        else:
+            resp = requests.request(method, url, headers=headers, **kwargs)
+
+        if resp.status_code == 401 and self.team_id:
+            try:
+                try:
+                    from backend.oauth import oauth_manager
+                except ImportError:
+                    from oauth import oauth_manager
+                new_token = oauth_manager.refresh_access_token(self.team_id)
+                if new_token:
+                    self.access_token = new_token
+                    retry_headers = self.headers
+                    if fn is not None:
+                        resp = fn(url, headers=retry_headers, **kwargs)
+                    else:
+                        resp = requests.request(method, url, headers=retry_headers, **kwargs)
+            except Exception as e:
+                print(f"[MiroClient] Token refresh failed: {e}")
+        return resp
+
+
     def get_board_info(self) -> Dict[str, Any]:
         url = f"{self.base_url}/boards/{self.board_id}"
-        resp = requests.get(url, headers=self.headers)
+        resp = self._request("GET", url)
         resp.raise_for_status()
         return resp.json()
 
@@ -73,7 +102,7 @@ class MiroClient:
         """Retrieves existing board items for in-place incremental diffing."""
         url = f"{self.base_url}/boards/{self.board_id}/items?limit={limit}"
         try:
-            resp = requests.get(url, headers=self.headers)
+            resp = self._request("GET", url)
             if resp.status_code == 200:
                 return resp.json().get("data", [])
         except Exception as e:
@@ -84,7 +113,7 @@ class MiroClient:
         """Retrieves existing board connectors."""
         url = f"{self.base_url}/boards/{self.board_id}/connectors?limit={limit}"
         try:
-            resp = requests.get(url, headers=self.headers)
+            resp = self._request("GET", url)
             if resp.status_code == 200:
                 return resp.json().get("data", [])
         except Exception as e:
@@ -117,7 +146,7 @@ class MiroClient:
                 "height": height
             }
         }
-        resp = requests.post(url, headers=self.headers, json=payload)
+        resp = self._request("POST", url, json=payload)
         resp.raise_for_status()
         return resp.json()
 
@@ -161,7 +190,7 @@ class MiroClient:
             }
 
         try:
-            resp = requests.patch(url, headers=self.headers, json=payload)
+            resp = self._request("PATCH", url, json=payload)
             if resp.status_code in [200, 201]:
                 return resp.json()
             print(f"[MiroClient] Update shape error ({resp.status_code}): {resp.text}")
@@ -202,7 +231,7 @@ class MiroClient:
             ]
 
         try:
-            resp = requests.post(url, headers=self.headers, json=payload)
+            resp = self._request("POST", url, json=payload)
             if resp.status_code in [200, 201]:
                 return resp.json()
             else:
@@ -218,7 +247,7 @@ class MiroClient:
                             "content": clean_caption
                         }
                     ]
-                f_resp = requests.post(url, headers=self.headers, json=fallback_payload)
+                f_resp = self._request("POST", url, json=fallback_payload)
                 if f_resp.status_code in [200, 201]:
                     return f_resp.json()
                 print(f"[MiroClient] Connector error ({resp.status_code}): {resp.text}")
@@ -244,7 +273,7 @@ class MiroClient:
             }
         }
         try:
-            resp = requests.post(url, headers=self.headers, json=payload)
+            resp = self._request("POST", url, json=payload)
             if resp.status_code in [200, 201]:
                 return resp.json()
             else:
@@ -274,7 +303,7 @@ class MiroClient:
                 "width": width
             }
         }
-        resp = requests.post(url, headers=self.headers, json=payload)
+        resp = self._request("POST", url, json=payload)
         resp.raise_for_status()
         return resp.json()
 
@@ -287,7 +316,7 @@ class MiroClient:
             }
         }
         try:
-            resp = requests.patch(url, headers=self.headers, json=payload)
+            resp = self._request("PATCH", url, json=payload)
             if resp.status_code in [200, 201]:
                 return resp.json()
         except Exception as e:
@@ -298,7 +327,7 @@ class MiroClient:
         """Deletes an item from the board."""
         url = f"{self.base_url}/boards/{self.board_id}/items/{item_id}"
         try:
-            resp = requests.delete(url, headers=self.headers)
+            resp = self._request("DELETE", url)
             return resp.status_code in [200, 204]
         except Exception as e:
             print(f"[MiroClient] Error deleting item {item_id}: {e}")
@@ -308,11 +337,12 @@ class MiroClient:
         """Deletes a connector from the board."""
         url = f"{self.base_url}/boards/{self.board_id}/connectors/{connector_id}"
         try:
-            resp = requests.delete(url, headers=self.headers)
+            resp = self._request("DELETE", url)
             return resp.status_code in [200, 204]
         except Exception as e:
             print(f"[MiroClient] Error deleting connector {connector_id}: {e}")
             return False
+
 
     def sync_architecture_diagram(self, arch_data: Dict[str, Any], start_x: float = -300, start_y: float = -150, perspective: Optional[str] = "overview") -> Dict[str, Any]:
         """
