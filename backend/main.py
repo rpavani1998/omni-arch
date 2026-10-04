@@ -95,8 +95,8 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
-@router.get("/")
 @router.get("/health")
+@router.get("/api")
 def health():
     return {"status": "ok", "app": "QwenArch"}
 
@@ -194,12 +194,70 @@ def sync_to_miro(req: SyncMiroRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+
+# Paths to dist and static folders
+CURRENT_DIR = Path(__file__).resolve().parent
+ROOT_DIR = CURRENT_DIR.parent
+FRONTEND_DIST = ROOT_DIR / "frontend" / "dist"
+FRONTEND_PUBLIC = ROOT_DIR / "frontend" / "public"
+SLIDES_HTML = FRONTEND_DIST / "slides.html" if (FRONTEND_DIST / "slides.html").exists() else ROOT_DIR / "slides.html"
+
 # Include router for root, /api, and /api/index.py to handle all Vercel proxying patterns
 app.include_router(router, prefix="")
 app.include_router(router, prefix="/api")
 app.include_router(router, prefix="/api/index.py")
 
+# Serve static assets if dist exists
+if (FRONTEND_DIST / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
+
+if (FRONTEND_DIST / "slides").exists():
+    app.mount("/slides", StaticFiles(directory=str(FRONTEND_DIST / "slides")), name="slides")
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    fav_path = FRONTEND_DIST / "favicon.ico"
+    if fav_path.exists():
+        return FileResponse(str(fav_path))
+    fav_pub = FRONTEND_PUBLIC / "favicon.ico"
+    if fav_pub.exists():
+        return FileResponse(str(fav_pub))
+    return HTMLResponse(content="", status_code=204)
+
+@app.get("/slides.html", include_in_schema=False)
+def get_slides():
+    if SLIDES_HTML.exists():
+        return FileResponse(str(SLIDES_HTML))
+    return HTMLResponse("<h1>Slides not found</h1>", status_code=404)
+
+@app.get("/", include_in_schema=False)
+def serve_spa():
+    index_file = FRONTEND_DIST / "index.html"
+    if index_file.exists():
+        return FileResponse(str(index_file))
+    return {"status": "ok", "app": "QwenArch"}
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def spa_catch_all(full_path: str):
+    # Don't intercept API routes
+    if full_path.startswith("api/") or full_path == "api" or full_path.startswith("api/index.py"):
+        raise HTTPException(status_code=404, detail="API route not found")
+    
+    # Check if a static file in dist matches
+    potential_file = FRONTEND_DIST / full_path
+    if potential_file.exists() and potential_file.is_file():
+        return FileResponse(str(potential_file))
+        
+    index_file = FRONTEND_DIST / "index.html"
+    if index_file.exists():
+        return FileResponse(str(index_file))
+    return {"status": "ok", "app": "QwenArch"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
 
