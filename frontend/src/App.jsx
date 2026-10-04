@@ -573,7 +573,10 @@ export default function App() {
           <span className="brand-cross">/</span>
           <div className="brand-logo-miro">M</div>
           <div className="brand-info">
-            <h1>OmniArch AI</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <h1>OmniArch AI</h1>
+              <span className="default-model-badge" title="Powered by Alibaba Qwen by default with support for any model">Qwen Default</span>
+            </div>
             <p>Universal Codebase to Miro Architecture Engine</p>
           </div>
         </div>
@@ -644,12 +647,26 @@ export default function App() {
             
             {/* Model Selector */}
             <select
-              value={provider}
-              onChange={(e) => setProvider(e.target.value)}
+              value={customSettings.aiProvider === 'custom' ? 'custom' : provider}
+              onChange={(e) => {
+                if (e.target.value === 'custom') {
+                  setShowSettingsModal(true);
+                } else {
+                  setProvider(e.target.value);
+                  setCustomSettings({
+                    ...customSettings,
+                    aiProvider: e.target.value
+                  });
+                }
+              }}
               className="model-select"
+              title="Select inference model: Alibaba Qwen (Default) or Custom Model"
             >
-              <option value="modelscope">Qwen 3.8 27B (Cloud)</option>
-              <option value="ollama">Local Qwen-Coder 7B</option>
+              <option value="modelscope">Qwen 3.8 27B (Default Cloud)</option>
+              <option value="ollama">Local Qwen 7B (Ollama)</option>
+              {customSettings.aiProvider === 'custom' && (
+                <option value="custom">Custom: {customSettings.aiModelName || 'Custom Model'}</option>
+              )}
             </select>
           </div>
 
@@ -871,12 +888,27 @@ export default function App() {
             )}
           </button>
 
-          {/* Strictly Contained Error Banner */}
+          {/* Enhanced Error Banner with Custom Model / Credit Settings Hint */}
           {error && (
             <div className="error-banner">
-              <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
-              <span className="error-text">{error}</span>
-              <button className="error-close-btn" onClick={() => setError(null)}>
+              <div className="error-body-wrapper">
+                <AlertTriangle size={17} className="error-icon" />
+                <div className="error-message-col">
+                  <span className="error-text">{error}</span>
+                  <div className="error-hint-box">
+                    <p>💡 If API credits are exhausted or rate limited, switch to your own custom API key or model:</p>
+                    <button
+                      type="button"
+                      className="error-settings-cta"
+                      onClick={() => setShowSettingsModal(true)}
+                    >
+                      <Settings size={13} />
+                      <span>Open Settings & Add Custom Model / Key</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <button className="error-close-btn" onClick={() => setError(null)} aria-label="Dismiss error">
                 <X size={14} />
               </button>
             </div>
