@@ -678,8 +678,8 @@ export default function App() {
           <div className="brand-logo-miro">M</div>
           <div className="brand-info">
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-              <h1>OmniArch AI</h1>
-              <span className="default-model-badge" title="Powered by Alibaba Qwen by default with support for any model">Qwen Default</span>
+              <h1>OmniArch</h1>
+              <span className="default-model-badge" title="Universal Multi-Model Architecture Engine">Multi-Model</span>
             </div>
             <p>Universal Codebase to Miro Architecture Engine</p>
           </div>
@@ -764,10 +764,10 @@ export default function App() {
                 }
               }}
               className="model-select"
-              title="Select inference model: Alibaba Qwen (Default) or Custom Model"
+              title="Select inference model: Qwen, DeepSeek, OpenAI, Claude, or Local Ollama"
             >
               <option value="modelscope">Qwen 3.8 27B (Default Cloud)</option>
-              <option value="ollama">Local Qwen 7B (Ollama)</option>
+              <option value="ollama">Local Qwen / DeepSeek (Ollama)</option>
               {customSettings.aiProvider === 'custom' && (
                 <option value="custom">Custom: {customSettings.aiModelName || 'Custom Model'}</option>
               )}
@@ -899,7 +899,7 @@ export default function App() {
                 <textarea
                   className="text-area custom-focus-textarea"
                   rows={3}
-                  placeholder="Add extra instructions or comments for Qwen (e.g., Highlight Stripe billing webhooks, migrate auth to OAuth2, detail Redis cache TTL, or specify team constraints)..."
+                  placeholder="Add extra instructions or comments (e.g., Highlight Stripe billing webhooks, migrate auth to OAuth2, detail Redis cache TTL, or specify team constraints)..."
                   value={customInstructions}
                   onChange={(e) => setCustomInstructions(e.target.value)}
                 />
@@ -1056,12 +1056,12 @@ export default function App() {
             {loading ? (
               <>
                 <RefreshCw size={17} className="spin" />
-                <span>Qwen Analyzing Architecture...</span>
+                <span>Synthesizing Architecture...</span>
               </>
             ) : (
               <>
                 <Sparkles size={17} />
-                <span>Analyze with Qwen-Coder</span>
+                <span>Analyze Architecture</span>
               </>
             )}
           </button>
@@ -1162,7 +1162,7 @@ export default function App() {
                 <span>Model Execution Progress</span>
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.74rem' }}>
                   {currentStep === 1 && `Ingesting ${activeTargetName}...`}
-                  {currentStep === 2 && 'Qwen reasoning through architecture...'}
+                  {currentStep === 2 && 'AI reasoning through architecture...'}
                   {currentStep === 3 && 'Synthesizing layers, nodes and protocol links...'}
                   {currentStep === 4 && 'Rendering visual diagram and syncing to Miro...'}
                 </span>
@@ -1244,7 +1244,7 @@ export default function App() {
               <div className="reasoning-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <Terminal size={14} />
-                  <span>Qwen Architectural Reasoning Chain</span>
+                  <span>Architectural Reasoning Chain</span>
                 </div>
                 {loading && <span className="streaming-badge">Streaming...</span>}
               </div>
@@ -1277,8 +1277,8 @@ export default function App() {
                 <h3>{loading ? `Synthesizing Architecture for ${activeTargetName}...` : 'No Architecture Generated Yet'}</h3>
                 <p>
                   {loading 
-                    ? 'Qwen is decomposing modules, databases, and message brokers into visual layers.'
-                    : 'Select a repository, local codebase, or preset on the left, then click "Analyze with Qwen-Coder".'}
+                    ? 'Analyzing modules, databases, and message brokers into visual layers.'
+                    : 'Select a repository, local codebase, or preset on the left, then click "Analyze Architecture".'}
                 </p>
               </div>
             </div>

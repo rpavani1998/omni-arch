@@ -1,5 +1,5 @@
-name: 'OmniArch AI - Visual Architecture Generator'
-description: 'Automatically analyzes codebases with Qwen and syncs 2D architecture diagrams to Miro boards.'
+name: 'OmniArch - Codebase to Miro Architecture Engine'
+description: 'Analyzes codebases with AI (Qwen, DeepSeek, OpenAI, Claude) and syncs visual architecture diagrams to Miro boards.'
 author: 'OmniArch Team'
 branding:
   icon: 'layout'
@@ -90,7 +90,7 @@ runs:
         print("[1/3] Ingesting codebase directory...")
         codebase_data = analyze_codebase(source_type="local", source_value=os.getcwd())
         
-        print("[2/3] Running Qwen architectural synthesis...")
+        print("[2/3] Running AI architectural synthesis...")
         engine = QwenEngine()
         arch_data = engine.generate_architecture(
             codebase_data=codebase_data,

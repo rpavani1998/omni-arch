@@ -120,7 +120,7 @@ router = APIRouter()
 @router.get("/health")
 @router.get("/healthz")
 def health():
-    return {"status": "ok", "app": "QwenArch"}
+    return {"status": "ok", "app": "OmniArch"}
 
 @router.get("/board-info")
 @router.post("/board-info")
@@ -266,7 +266,7 @@ def serve_index():
     index = DIST_DIR / "index.html"
     if index.exists():
         return FileResponse(str(index))
-    return {"status": "ok", "app": "QwenArch"}
+    return {"status": "ok", "app": "OmniArch"}
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,10 +1,10 @@
-# QwenArch — Codebase to Miro Architecture Engine
+# OmniArch — Codebase to Miro Architecture Engine
 
-QwenArch connects **Qwen's code reasoning LLM** with **Miro's interactive whiteboard canvas** to ingest codebases and generate live, editable system architecture diagrams.
+OmniArch connects **multi-model code reasoning LLMs (Qwen, DeepSeek, OpenAI, Claude, Local Ollama)** with **Miro's interactive whiteboard canvas** to ingest codebases and generate live, editable system architecture diagrams.
 
 ## One-Click Vercel Deployment
 
-1. Drag-and-drop the `qwenarch-vercel.zip` file or connect your GitHub repository to Vercel.
+1. Drag-and-drop the `omniarch-vercel.zip` file or connect your GitHub repository to Vercel.
 2. Under **Project Settings > Environment Variables**, configure:
    - `MIRO_ACCESS_TOKEN` : Your Miro OAuth token (`eyJ...`)
    - `MIRO_BOARD_ID` : Your target Miro Board ID (e.g. `uXjVEekRCSA=`)
