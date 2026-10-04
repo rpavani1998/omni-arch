@@ -100,12 +100,27 @@ class MiroClient:
         resp.raise_for_status()
         return resp.json()
 
-    def create_connector(self, start_id: str, end_id: str, caption: str = "", stroke_color: str = "#0284c7") -> Dict[str, Any]:
+    def create_connector(
+        self, 
+        start_id: str, 
+        end_id: str, 
+        caption: str = "", 
+        stroke_color: str = "#0284c7",
+        start_snap: str = "right",
+        end_snap: str = "left",
+        shape: str = "elbow"
+    ) -> Dict[str, Any]:
         url = f"{self.base_url}/boards/{self.board_id}/connectors"
         payload = {
-            "startItem": {"id": start_id},
-            "endItem": {"id": end_id},
-            "shape": "curved",
+            "startItem": {
+                "id": start_id,
+                "snapTo": start_snap
+            },
+            "endItem": {
+                "id": end_id,
+                "snapTo": end_snap
+            },
+            "shape": shape,
             "style": {
                 "strokeColor": stroke_color,
                 "strokeWidth": "2.0",
@@ -143,49 +158,19 @@ class MiroClient:
         resp.raise_for_status()
         return resp.json()
 
-    def create_frame(self, title: str, x: float, y: float, width: float, height: float) -> Optional[Dict[str, Any]]:
-        url = f"{self.base_url}/boards/{self.board_id}/frames"
-        payload = {
-            "data": {
-                "title": title
-            },
-            "style": {
-                "fillColor": "#ffffff"
-            },
-            "position": {
-                "origin": "center",
-                "x": x,
-                "y": y
-            },
-            "geometry": {
-                "width": width,
-                "height": height
-            }
-        }
-        try:
-            resp = requests.post(url, headers=self.headers, json=payload)
-            if resp.status_code in [200, 201]:
-                return resp.json()
-            else:
-                print(f"[MiroClient] Frame notice ({resp.status_code}): {resp.text}")
-                return None
-        except Exception as e:
-            print(f"[MiroClient] Frame creation exception: {e}")
-            return None
-
     def sync_architecture_diagram(self, arch_data: Dict[str, Any], start_x: float = -300, start_y: float = -150, perspective: Optional[str] = "overview") -> Dict[str, Any]:
-        """Calculates 2D non-overlapping layout, creates a dedicated perspective Frame, and renders the full architecture graph onto Miro."""
+        """Calculates 2D non-overlapping layout with barycenter alignment, orthogonal elbow connectors, and dedicated perspective Frames."""
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         # Multi-perspective offset coordinates to maintain separate gallery frames on the same board
         PERSPECTIVE_OFFSETS = {
             "overview": {"x": 0, "y": 0, "title": "System Overview"},
-            "data_flow": {"x": 2800, "y": 0, "title": "Data Flow & Request Lifecycle"},
-            "security_auth": {"x": 5600, "y": 0, "title": "Security & Zero-Trust Auth"},
-            "event_driven": {"x": 0, "y": 1800, "title": "Event-Driven & Async Pipelines"},
-            "database_storage": {"x": 2800, "y": 1800, "title": "Database & Storage Topology"},
-            "devops_cloud": {"x": 5600, "y": 1800, "title": "Cloud & Infrastructure"},
-            "ai_rag": {"x": 0, "y": 3600, "title": "AI / LLM & RAG Pipeline"}
+            "data_flow": {"x": 3200, "y": 0, "title": "Data Flow & Request Lifecycle"},
+            "security_auth": {"x": 6400, "y": 0, "title": "Security & Zero-Trust Auth"},
+            "event_driven": {"x": 0, "y": 2200, "title": "Event-Driven & Async Pipelines"},
+            "database_storage": {"x": 3200, "y": 2200, "title": "Database & Storage Topology"},
+            "devops_cloud": {"x": 6400, "y": 2200, "title": "Cloud & Infrastructure"},
+            "ai_rag": {"x": 0, "y": 4400, "title": "AI / LLM & RAG Pipeline"}
         }
 
         persp_info = PERSPECTIVE_OFFSETS.get(perspective or "overview", {"x": 0, "y": 0, "title": "System Architecture"})
@@ -201,7 +186,9 @@ class MiroClient:
 
         # Group nodes by layer
         layer_buckets: Dict[str, List[Dict[str, Any]]] = {}
-        for layer in layers:
+        node_layer_index: Dict[str, int] = {}
+        
+        for l_idx, layer in enumerate(layers):
             layer_buckets[layer["id"]] = []
 
         for node in nodes:
@@ -210,23 +197,52 @@ class MiroClient:
                 layer_buckets[lid] = []
             layer_buckets[lid].append(node)
 
+        # Build adjacency mapping for crossing-minimization (Sugiyama Barycenter heuristic)
+        incoming_map: Dict[str, List[str]] = {}
+        for conn in connections:
+            src = conn.get("from")
+            dst = conn.get("to")
+            if src and dst:
+                incoming_map.setdefault(dst, []).append(src)
+
+        node_pos_index: Dict[str, float] = {}
+
+        # Sort nodes within each tier column to align with their connecting parents
+        for l_idx, layer in enumerate(layers):
+            lid = layer["id"]
+            tier_nodes = layer_buckets.get(lid, [])
+            if l_idx > 0 and tier_nodes:
+                def get_barycenter(n):
+                    parents = incoming_map.get(n["id"], [])
+                    if not parents:
+                        return 999.0
+                    parent_positions = [node_pos_index.get(p, 0.0) for p in parents if p in node_pos_index]
+                    return sum(parent_positions) / len(parent_positions) if parent_positions else 999.0
+
+                tier_nodes.sort(key=get_barycenter)
+                layer_buckets[lid] = tier_nodes
+
+            for r_idx, n in enumerate(tier_nodes):
+                node_pos_index[n["id"]] = float(r_idx)
+
         # Generous collision-free spacing dimensions
-        col_width = 440       # 440px tier column width (200px clear corridor between cards)
-        row_height = 200      # 200px row height (90px clear vertical gap)
+        col_width = 480       # 480px tier column width (240px wide corridor for orthogonal connector lines)
+        row_height = 220      # 220px row height (120px clear vertical gap between cards)
         card_width = 240
-        card_height = 110
+        card_height = 100
 
         active_layers = [l for l in layers if layer_buckets.get(l["id"])]
         num_cols = max(1, len(active_layers))
         max_rows = max([len(nlist) for nlist in layer_buckets.values()] or [1])
 
         # Compute dynamic frame dimensions
-        frame_w = max(2200, (num_cols * col_width) + 700)
-        frame_h = max(1200, (max_rows * row_height) + 400)
-        frame_center_x = base_x + ((num_cols - 1) * col_width / 2) - 100
+        frame_w = max(2400, (num_cols * col_width) + 800)
+        frame_h = max(1300, (max_rows * row_height) + 500)
+        frame_center_x = base_x + ((num_cols - 1) * col_width / 2) - 80
         frame_center_y = base_y
 
         created_nodes_map: Dict[str, str] = {} # node_id -> miro_item_id
+        node_coords_map: Dict[str, Dict[str, Any]] = {} # node_id -> {x, y, col_idx, row_idx}
         all_created_items: List[Dict[str, Any]] = []
         created_frame = None
 
@@ -245,7 +261,7 @@ class MiroClient:
         except Exception as e:
             print(f"[MiroClient] Error creating frame: {e}")
 
-        # 2. Place Architecture Summary Card on left
+        # 2. Place Architecture Summary Card on left with safe clearance
         summary_content = f"<b>{arch_data.get('system_title', 'System Architecture')}</b><br/><br/>" \
                           f"<b>Perspective:</b> {persp_info['title']}<br/>" \
                           f"<b>Style:</b> {arch_data.get('architecture_style', 'N/A')}<br/>" \
@@ -256,7 +272,7 @@ class MiroClient:
         try:
             summary_sticky = self.create_sticky_note(
                 content=summary_content, 
-                x=base_x - 420, 
+                x=base_x - 460, 
                 y=base_y, 
                 color="light_yellow", 
                 width=300
@@ -284,6 +300,13 @@ class MiroClient:
                 html_content = f"<strong>{node['name']}</strong><br/>" \
                                f"<small style='color:#475569;'>{node.get('tech', '')}</small><br/>" \
                                f"<span style='font-size:11px;'>{node.get('description', '')}</span>"
+
+                node_coords_map[node["id"]] = {
+                    "x": current_x,
+                    "y": current_y,
+                    "col_idx": col_idx,
+                    "row_idx": row_idx
+                }
 
                 shapes_to_create.append({
                     "node_id": node["id"],
@@ -318,7 +341,7 @@ class MiroClient:
                     created_nodes_map[node_id] = resp["id"]
                     all_created_items.append(resp)
 
-        # 4. Draw Connectors in parallel
+        # 4. Draw Connectors with Smart Orthogonal Snap Routing
         connectors_to_create = []
         for conn in connections:
             from_id = conn.get("from")
@@ -330,10 +353,50 @@ class MiroClient:
                 if conn.get("label"):
                     caption = f"{caption}: {conn.get('label')}" if caption else conn.get("label")
 
+                src_coord = node_coords_map.get(from_id, {"col_idx": 0, "row_idx": 0, "x": 0, "y": 0})
+                dst_coord = node_coords_map.get(to_id, {"col_idx": 0, "row_idx": 0, "x": 0, "y": 0})
+
+                # Determine intelligent snap ports & shape
+                if src_coord["col_idx"] < dst_coord["col_idx"]:
+                    # Forward tier connection (e.g. Frontend -> Gateway -> Service)
+                    start_snap = "right"
+                    end_snap = "left"
+                    conn_shape = "elbow"
+                elif src_coord["col_idx"] == dst_coord["col_idx"]:
+                    # Same tier connection (vertical)
+                    if src_coord["row_idx"] < dst_coord["row_idx"]:
+                        start_snap = "bottom"
+                        end_snap = "top"
+                    else:
+                        start_snap = "top"
+                        end_snap = "bottom"
+                    conn_shape = "curved"
+                else:
+                    # Feedback / Return loop
+                    start_snap = "bottom"
+                    end_snap = "bottom"
+                    conn_shape = "curved"
+
+                # Smart edge colors by protocol
+                proto_lower = (conn.get("protocol") or "").lower()
+                stroke_color = "#0284c7" # default sky blue
+                if "kafka" in proto_lower or "queue" in proto_lower or "event" in proto_lower or "pubsub" in proto_lower:
+                    stroke_color = "#7c3aed" # Purple for async events
+                elif "sql" in proto_lower or "db" in proto_lower or "postgres" in proto_lower or "query" in proto_lower:
+                    stroke_color = "#d97706" # Amber for database queries
+                elif "auth" in proto_lower or "jwt" in proto_lower or "oauth" in proto_lower:
+                    stroke_color = "#dc2626" # Red for auth boundaries
+                elif "grpc" in proto_lower or "rpc" in proto_lower:
+                    stroke_color = "#059669" # Emerald for internal gRPC
+
                 connectors_to_create.append({
                     "start_id": start_miro_id,
                     "end_id": end_miro_id,
-                    "caption": caption[:45] if caption else ""
+                    "caption": caption[:40] if caption else "",
+                    "start_snap": start_snap,
+                    "end_snap": end_snap,
+                    "shape": conn_shape,
+                    "stroke_color": stroke_color
                 })
 
         def create_single_conn(task):
@@ -341,7 +404,11 @@ class MiroClient:
                 return self.create_connector(
                     start_id=task["start_id"],
                     end_id=task["end_id"],
-                    caption=task["caption"]
+                    caption=task["caption"],
+                    stroke_color=task["stroke_color"],
+                    start_snap=task["start_snap"],
+                    end_snap=task["end_snap"],
+                    shape=task["shape"]
                 )
             except Exception as e:
                 print(f"[MiroClient] Error creating connector: {e}")
