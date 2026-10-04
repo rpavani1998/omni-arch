@@ -53,7 +53,7 @@ TYPE_STYLES = {
 class MiroClient:
     def __init__(self, access_token: Optional[str] = None, board_id: Optional[str] = None):
         self.access_token = access_token or os.getenv("MIRO_ACCESS_TOKEN", "")
-        self.board_id = board_id or os.getenv("MIRO_BOARD_ID", "uXjVEekRCSA=")
+        self.board_id = board_id or os.getenv("MIRO_BOARD_ID", "")
         self.base_url = "https://api.miro.com/v2"
 
     @property

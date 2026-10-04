@@ -15,13 +15,16 @@ IGNORED_DIRS = {
 
 IGNORED_EXTENSIONS = {
     ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".pdf", ".zip",
-    ".tar", ".gz", ".lock", ".pyc", ".min.js", ".min.css", ".map"
+    ".tar", ".gz", ".lock", ".pyc", ".min.js", ".min.css", ".map",
+    ".pkl", ".pickle", ".h5", ".pt", ".pth", ".bin", ".onnx", ".joblib",
+    ".npy", ".npz", ".parquet", ".feather", ".db", ".sqlite", ".sqlite3",
+    ".csv", ".tsv", ".log", ".txt", ".md"
 }
 
 KEY_CONFIG_FILES = {
     "package.json", "requirements.txt", "pyproject.toml", "Pipfile",
     "go.mod", "Cargo.toml", "pom.xml", "build.gradle", "Dockerfile",
-    "docker-compose.yml", "docker-compose.yaml", "README.md", "openapi.yaml",
+    "docker-compose.yml", "docker-compose.yaml", "openapi.yaml",
     "openapi.json", "prisma.schema", "schema.prisma"
 }
 
@@ -29,7 +32,7 @@ class CodebaseAnalyzer:
     """Scans and extracts structural architecture signatures from codebases."""
 
     @staticmethod
-    def scan_directory(root_path: str, max_files: int = 120, max_file_size_kb: int = 50) -> Dict[str, Any]:
+    def scan_directory(root_path: str, max_files: int = 120, max_file_size_kb: int = 40) -> Dict[str, Any]:
         root = Path(root_path)
         if not root.exists():
             raise FileNotFoundError(f"Path does not exist: {root_path}")
@@ -51,7 +54,7 @@ class CodebaseAnalyzer:
                 if fname.startswith('.') and fname != '.env.example':
                     continue
                 ext = Path(fname).suffix.lower()
-                if ext in IGNORED_EXTENSIONS:
+                if ext in IGNORED_EXTENSIONS and fname not in KEY_CONFIG_FILES:
                     continue
 
                 total_files += 1
@@ -66,20 +69,20 @@ class CodebaseAnalyzer:
                 full_path = Path(dirpath) / fname
                 is_key_config = fname in KEY_CONFIG_FILES
                 is_entry_or_route = any(k in rel_path.lower() for k in [
-                    "route", "controller", "api", "service", "model", "schema",
-                    "main.", "app.", "server.", "index.", "router"
-                ])
+                    "router", "controller", "api", "service", "model", "schema",
+                    "main.", "app.", "server.", "index."
+                ]) and ext in [".py", ".ts", ".js", ".go", ".rs", ".java", ".prisma", ".json", ".yml", ".yaml"]
 
-                if (is_key_config or is_entry_or_route) and len(key_files_content) < 35:
+                if (is_key_config or is_entry_or_route) and len(key_files_content) < 14:
                     try:
                         size_kb = full_path.stat().st_size / 1024
                         if size_kb <= max_file_size_kb:
                             with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                                 content = f.read()
                                 if len(content.strip()) > 0:
-                                    # Truncate if very long
-                                    if len(content) > 3000:
-                                        content = content[:3000] + "\n... [truncated]"
+                                    # Keep concise summary of entry files
+                                    if len(content) > 1200:
+                                        content = content[:1200] + "\n... [truncated]"
                                     key_files_content[rel_path] = content
                     except Exception:
                         pass
