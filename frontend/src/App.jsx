@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import confetti from 'canvas-confetti';
+import ArchitectureGraph from './components/ArchitectureGraph';
 import { 
   GitBranch, 
   Folder, 
@@ -11,91 +13,36 @@ import {
   Cpu, 
   Share2, 
   AlertTriangle, 
-  ArrowRight, 
   ChevronDown, 
   ChevronUp, 
   Terminal, 
-  Zap, 
   History, 
   X, 
   RotateCcw, 
-  Clock, 
   Radio, 
-  Coins, 
   Sun, 
   Moon, 
   Sliders, 
   Target, 
   Presentation, 
   Settings, 
-  Key, 
   ShieldCheck, 
   Eye, 
   EyeOff, 
   Save, 
-  Activity, 
-  Box, 
+  Zap,
+  Activity,
+  Box,
   Database,
   Code2,
   Download,
   Copy,
   Check,
-  FileText
+  Coins,
+  Clock
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
-import ArchitectureGraph from './components/ArchitectureGraph';
 
-const DEFAULT_PRESETS_DATA = [
-  {
-    id: 'run-cloudshop',
-    title: 'CloudShop Microservices',
-    time: 'Preset',
-    source_type: 'prompt',
-    architecture: {
-      system_title: 'CloudShop Microservices',
-      summary: 'A cloud-native e-commerce platform using an SSR storefront, API gateway, domain microservices, event streaming, and distributed data stores.',
-      architecture_style: 'Event-Driven Microservices',
-      tech_stack: ['Next.js 15', 'FastAPI', 'Go', 'Kafka', 'PostgreSQL', 'Redis', 'Elasticsearch'],
-      layers: [
-        { id: 'layer_presentation', name: 'Presentation Tier', order: 1 },
-        { id: 'layer_gateway', name: 'API Gateway & Ingress', order: 2 },
-        { id: 'layer_services', name: 'Domain Microservices', order: 3 },
-        { id: 'layer_data', name: 'Storage & Event Bus', order: 4 }
-      ],
-      nodes: [
-        { id: 'web_storefront', name: 'Web Storefront', layer_id: 'layer_presentation', type: 'frontend', tech: 'Next.js 15 / Tailwind', description: 'SSR catalog, cart, and responsive checkout.', endpoints_or_features: ['Product Catalog', 'Cart UI'] },
-        { id: 'api_gateway', name: 'API Gateway', layer_id: 'layer_gateway', type: 'gateway', tech: 'Envoy / Kong', description: 'Routes /api/v1 with JWT authentication and rate limiting.', endpoints_or_features: ['JWT Auth', 'Rate Limiter'] },
-        { id: 'order_service', name: 'Order Service', layer_id: 'layer_services', type: 'service', tech: 'Go (Golang)', description: 'Manages order state machine and Stripe checkout webhooks.', endpoints_or_features: ['Order State Machine', 'Stripe Webhooks'] },
-        { id: 'catalog_service', name: 'Catalog Service', layer_id: 'layer_services', type: 'service', tech: 'Python FastAPI', description: 'Product taxonomy and faceted search.', endpoints_or_features: ['Faceted Search', 'Category API'] },
-        { id: 'notification_worker', name: 'Notification Worker', layer_id: 'layer_services', type: 'service', tech: 'Python Celery', description: 'Listens to Kafka events for SendGrid and Twilio alerts.', endpoints_or_features: ['Email Alerts', 'SMS Gateway'] },
-        { id: 'postgres_orders', name: 'PostgreSQL Orders DB', layer_id: 'layer_data', type: 'database', tech: 'PostgreSQL 16', description: 'ACID transactional data for orders and user ledger.', endpoints_or_features: ['Orders Table', 'User Accounts'] },
-        { id: 'redis_cache', name: 'Redis Cache', layer_id: 'layer_data', type: 'cache', tech: 'Redis 7', description: 'In-memory session tokens and shopping cart storage.', endpoints_or_features: ['Session Store', 'Hot Catalog Cache'] },
-        { id: 'kafka_bus', name: 'Kafka Event Bus', layer_id: 'layer_data', type: 'queue', tech: 'Apache Kafka', description: 'Publishes OrderCreated and PaymentCompleted events.', endpoints_or_features: ['OrderCreated', 'StockUpdated'] }
-      ],
-      connections: [
-        { from: 'web_storefront', to: 'api_gateway', protocol: 'HTTPS / REST', label: 'User Actions' },
-        { from: 'api_gateway', to: 'order_service', protocol: 'gRPC', label: 'Create Order' },
-        { from: 'api_gateway', to: 'catalog_service', protocol: 'REST', label: 'Browse Products' },
-        { from: 'order_service', to: 'postgres_orders', protocol: 'SQL', label: 'Persist Order' },
-        { from: 'order_service', to: 'kafka_bus', protocol: 'Pub/Sub', label: 'OrderCreated' },
-        { from: 'kafka_bus', to: 'notification_worker', protocol: 'Consumer', label: 'Dispatch Alerts' },
-        { from: 'catalog_service', to: 'redis_cache', protocol: 'Cache Lookup', label: 'Fast Read' }
-      ],
-      insights: {
-        strengths: ['Decoupled event-driven architecture via Kafka', 'High-speed session caching with Redis', 'Clean separation of concerns across Go and Python microservices'],
-        bottlenecks: ['Kafka partition lag under sudden flash sales', 'Potential database connection pool exhaustion during checkout spikes'],
-        recommendations: ['Implement pgBouncer connection pooling for PostgreSQL', 'Add dead-letter queues (DLQ) to Kafka notification consumers']
-      }
-    },
-    usage: {
-      provider: 'ModelScope Cloud',
-      model: 'Qwen/Qwen3.8-27B',
-      total_tokens: 2140,
-      duration_ms: 12400,
-      reasoning: '1. Ingress Tier: Analyzed Envoy/Kong reverse proxy routing traffic from Next.js.\n2. Microservice Boundaries: Decomposed Go Order Service and Python Catalog Service.\n3. State & Persistence: Mapped PostgreSQL transactional storage alongside Redis session cache.\n4. Event Streaming: Modeled asynchronous Kafka pub/sub pipeline for notification dispatch.'
-    }
-  }
-];
+const DEFAULT_PRESETS_DATA = [];
 
 const DIAGRAM_PERSPECTIVES = [
   {
