@@ -670,9 +670,13 @@ function clearSecureSettings() {
     setActiveTargetName(displayName);
 
     try {
+      const effectiveProvider = customSettings.aiProvider || provider;
+      const effectiveModel = customSettings.aiModelName || (effectiveProvider === 'ollama' ? 'Local Qwen 7B' : 'Qwen 3.8 27B');
+      const effectiveProviderLabel = effectiveProvider === 'custom' ? 'Custom Provider' : (effectiveProvider === 'ollama' ? 'Local Ollama' : 'ModelScope Cloud');
+
       setUsage({
-        model: provider === 'ollama' ? 'Local Qwen 7B' : 'Qwen 3.8 27B',
-        provider: provider === 'ollama' ? 'Local Ollama' : 'ModelScope Cloud',
+        model: effectiveModel,
+        provider: effectiveProviderLabel,
         total_tokens: 'Streaming...',
         duration_ms: 0,
         reasoning: isPullUpdate 
@@ -681,8 +685,6 @@ function clearSecureSettings() {
       });
 
       setCurrentStep(2); // 2. Reasoning
-
-      const effectiveProvider = customSettings.aiProvider || provider;
       const res = await fetch('/api/analyze-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -736,13 +738,6 @@ function clearSecureSettings() {
               }));
             } else if (data.type === 'content') {
               setCurrentStep(3); // 3. Synthesizing diagram
-              if (!streamedReasoning || streamedReasoning.length < 50) {
-                streamedReasoning += data.chunk;
-                setUsage(prev => ({
-                  ...prev,
-                  reasoning: streamedReasoning
-                }));
-              }
             } else if (data.type === 'complete') {
               completedSuccessfully = true;
               setCurrentStep(4); // 4. Done
