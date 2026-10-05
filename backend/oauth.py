@@ -155,8 +155,16 @@ class MiroOAuthManager:
     def generate_authorization_url(self, team_id: Optional[str] = None) -> Dict[str, str]:
         """Generates a secure OAuth2 authorization URL with CSRF state token."""
         state = secrets.token_urlsafe(32)
-        # Store state for validation (expires in 15 minutes)
-        self._pending_states[state] = time.time() + 900
+        expiry_ts = time.time() + 900  # 15 minutes TTL
+        
+        # Store state in KV if enabled, otherwise fallback to in-memory dictionary
+        if installation_store.is_kv_enabled():
+            installation_store._kv_request(["SET", f"omniarch:oauth_state:{state}", "1", "EX", "900"])
+        
+        # Always record locally as fallback/cache (and prune expired states)
+        now = time.time()
+        self._pending_states = {s: exp for s, exp in self._pending_states.items() if exp > now}
+        self._pending_states[state] = expiry_ts
         
         params = {
             "response_type": "code",
@@ -176,7 +184,17 @@ class MiroOAuthManager:
         }
 
     def validate_state(self, state: str) -> bool:
-        """Validates CSRF state parameter and consumes it."""
+        """Validates CSRF state parameter and consumes it (distributed-safe)."""
+        if not state:
+            return False
+            
+        if installation_store.is_kv_enabled():
+            val = installation_store._kv_request(["GET", f"omniarch:oauth_state:{state}"])
+            if val:
+                installation_store._kv_request(["DEL", f"omniarch:oauth_state:{state}"])
+                self._pending_states.pop(state, None)
+                return True
+                
         expiry = self._pending_states.pop(state, None)
         if expiry and expiry > time.time():
             return True

@@ -56,6 +56,21 @@ class TestOAuth(unittest.TestCase):
         del os.environ["KV_REST_API_URL"]
         del os.environ["KV_REST_API_TOKEN"]
 
+    def test_distributed_oauth_state_with_kv(self):
+        from unittest.mock import patch
+        with patch.object(self.store, "is_kv_enabled", return_value=True), \
+             patch.object(self.store, "_kv_request") as mock_kv:
+            # Simulate KV responses
+            mock_kv.return_value = "1"
+            auth_data = self.oauth.generate_authorization_url()
+            state = auth_data["state"]
+            self.assertTrue(bool(state))
+
+            # Validation calls KV
+            valid = self.oauth.validate_state(state)
+            self.assertTrue(valid)
+
+
 if __name__ == "__main__":
     unittest.main()
 

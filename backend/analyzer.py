@@ -28,16 +28,49 @@ KEY_CONFIG_FILES = {
     "openapi.json", "prisma.schema", "schema.prisma"
 }
 
-# Secret and Credential Redaction Patterns
+# Comprehensive Secret and Credential Redaction Patterns
 SECRET_PATTERNS = [
     (re.compile(r'AKIA[0-9A-Z]{16}', re.IGNORECASE), '[REDACTED_AWS_KEY]'),
     (re.compile(r'ghp_[0-9a-zA-Z]{36}', re.IGNORECASE), '[REDACTED_GITHUB_TOKEN]'),
+    (re.compile(r'github_pat_[0-9a-zA-Z_]{60,}', re.IGNORECASE), '[REDACTED_GITHUB_PAT]'),
     (re.compile(r'sk-[0-9a-zA-Z]{20,}', re.IGNORECASE), '[REDACTED_OPENAI_KEY]'),
-    (re.compile(r'(?:bearer\s+)[a-zA-Z0-9_\-\.]{25,}', re.IGNORECASE), 'Bearer [REDACTED_TOKEN]'),
-    (re.compile(r'(?:postgres|mysql|mongodb|redis):\/\/[^:\s]+:[^@\s]+@[^\/\s]+', re.IGNORECASE), '[REDACTED_DB_CONNECTION_STRING]'),
-    (re.compile(r'-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA )?PRIVATE KEY-----'), '[REDACTED_PRIVATE_KEY]'),
-    (re.compile(r'(password|secret|api_key|access_token|private_key)\s*[:=]\s*["\'][^"\']{6,}["\']', re.IGNORECASE), r'\1: "[REDACTED_SECRET]"')
+    (re.compile(r'xox[baprs]-[0-9a-zA-Z-]{10,}', re.IGNORECASE), '[REDACTED_SLACK_TOKEN]'),
+    (re.compile(r'AIza[0-9A-Za-z-_]{35}', re.IGNORECASE), '[REDACTED_GOOGLE_API_KEY]'),
+    (re.compile(r'(?:sk|rk)_(?:live|test)_[0-9a-zA-Z]{24,}', re.IGNORECASE), '[REDACTED_STRIPE_KEY]'),
+    (re.compile(r'eyJ[A-Za-z0-9-_]{10,}\.eyJ[A-Za-z0-9-_]{10,}\.[A-Za-z0-9-_]{10,}', re.IGNORECASE), '[REDACTED_JWT_TOKEN]'),
+    (re.compile(r'(?:bearer\s+)[a-zA-Z0-9_\-\.]{20,}', re.IGNORECASE), 'Bearer [REDACTED_TOKEN]'),
+    (re.compile(r'(?:postgres|mysql|mongodb|redis|amqp|mssql):\/\/[^:\s]+:[^@\s]+@[^\/\s]+', re.IGNORECASE), '[REDACTED_DB_CONNECTION_STRING]'),
+    (re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----'), '[REDACTED_PRIVATE_KEY]'),
+    (re.compile(r'(password|secret|api_key|access_token|private_key|client_secret)\s*[:=]\s*["\'][^"\']{4,}["\']', re.IGNORECASE), r'\1: "[REDACTED_SECRET]"')
 ]
+
+FORBIDDEN_SYSTEM_PATHS = {
+    "/etc", "/var", "/proc", "/sys", "/dev", "/root", "/boot", "/bin", "/sbin",
+    "/usr", "/usr/bin", "/usr/sbin", "/Library", "/System",
+    "/private/etc", "/private/var", "/private/tmp",
+    "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)"
+}
+
+def is_safe_scan_path(path: Path) -> bool:
+    """Validates that path does not point to sensitive operating system locations."""
+    try:
+        resolved = path.resolve()
+        resolved_str = str(resolved).lower()
+        for forbidden in FORBIDDEN_SYSTEM_PATHS:
+            f_norm = str(Path(forbidden).resolve()).lower() if Path(forbidden).exists() else forbidden.lower()
+            if resolved_str == f_norm or resolved_str.startswith(f_norm + os.sep) or resolved_str == forbidden.lower() or resolved_str.startswith(forbidden.lower() + os.sep):
+                return False
+        # Disallow scanning home directory root itself or sensitive user directories
+        home = Path.home().resolve()
+        if resolved == home:
+            return False
+        for sensitive_user_dir in [".ssh", ".aws", ".gnupg", ".config", ".gemini"]:
+            sens_path = (home / sensitive_user_dir).resolve()
+            if sens_path in resolved.parents or resolved == sens_path:
+                return False
+        return True
+    except Exception:
+        return False
 
 def redact_secrets(text: str) -> str:
     """Scrubs passwords, tokens, API keys, and connection strings from text."""
@@ -112,9 +145,12 @@ class CodebaseAnalyzer:
 
     @staticmethod
     def scan_directory(root_path: str, max_files: int = 150, max_file_size_kb: int = 50) -> Dict[str, Any]:
-        root = Path(root_path)
-        if not root.exists():
-            raise FileNotFoundError(f"Path does not exist: {root_path}")
+        root = Path(root_path).resolve()
+        if not root.exists() or not root.is_dir():
+            raise FileNotFoundError(f"Path does not exist or is not a directory: {root_path}")
+
+        if not is_safe_scan_path(root):
+            raise PermissionError(f"Access to path '{root_path}' is restricted for security reasons.")
 
         file_tree: List[str] = []
         key_files_content: Dict[str, str] = {}
@@ -129,15 +165,29 @@ class CodebaseAnalyzer:
             # Prune ignored directories in-place
             dirnames[:] = [d for d in dirnames if d not in IGNORED_DIRS and not d.startswith('.')]
             
-            rel_dir = os.path.relpath(dirpath, root)
-            if rel_dir == ".":
-                rel_dir = ""
+            try:
+                resolved_dir = Path(dirpath).resolve()
+                if not str(resolved_dir).startswith(str(root)):
+                    continue
+                rel_dir = os.path.relpath(dirpath, root)
+                if rel_dir == ".":
+                    rel_dir = ""
+            except Exception:
+                continue
 
             for fname in filenames:
                 if fname.startswith('.') and fname != '.env.example':
                     continue
                 ext = Path(fname).suffix.lower()
                 if ext in IGNORED_EXTENSIONS and fname not in KEY_CONFIG_FILES:
+                    continue
+
+                full_path = (Path(dirpath) / fname).resolve()
+                # Ensure symlinks cannot escape the root boundary
+                try:
+                    if not str(full_path).startswith(str(root)):
+                        continue
+                except Exception:
                     continue
 
                 total_files += 1
@@ -147,7 +197,6 @@ class CodebaseAnalyzer:
                 if ext:
                     languages[ext] = languages.get(ext, 0) + 1
 
-                full_path = Path(dirpath) / fname
                 is_key_config = fname in KEY_CONFIG_FILES
                 is_entry_or_route = any(k in rel_path.lower() for k in [
                     "router", "controller", "api", "service", "model", "schema",

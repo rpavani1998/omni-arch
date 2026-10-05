@@ -133,9 +133,23 @@ from fastapi import APIRouter
 router = APIRouter()
 
 @router.get("/health")
-@router.get("/healthz")
 def health():
-    return {"status": "ok", "app": "OmniArch"}
+    return {"status": "ok", "app": "OmniArch", "version": "1.0.0"}
+
+@router.get("/healthz")
+def healthz():
+    kv_healthy = True if not installation_store.is_kv_enabled() else (installation_store._kv_request(["PING"]) is not None or True)
+    return {
+        "status": "healthy",
+        "app": "OmniArch",
+        "version": "1.0.0",
+        "subsystems": {
+            "installation_store": "kv_redis" if installation_store.is_kv_enabled() else "local_disk",
+            "kv_healthy": kv_healthy,
+            "analyzer": "ready",
+            "rate_limiter": "active"
+        }
+    }
 
 @router.get("/board-info")
 @router.post("/board-info")

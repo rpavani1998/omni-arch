@@ -26,31 +26,49 @@ class MiroClient:
             "Accept": "application/json"
         }
 
-    def _request(self, method: str, url: str, **kwargs) -> requests.Response:
-        """Executes HTTP request with automatic token refresh on 401 Unauthorized."""
+    def _request(self, method: str, url: str, max_retries: int = 3, **kwargs) -> requests.Response:
+        """Executes HTTP request with automatic token refresh on 401 and exponential backoff on 429/5xx."""
+        import time
+        import random
         headers = kwargs.pop("headers", None) or self.headers
-        fn = getattr(requests, method.lower(), None)
-        if fn is not None:
-            resp = fn(url, headers=headers, **kwargs)
-        else:
-            resp = requests.request(method, url, headers=headers, **kwargs)
+        attempt = 0
+        resp = None
 
-        if resp.status_code == 401 and self.team_id:
-            try:
+        while attempt <= max_retries:
+            attempt += 1
+            fn = getattr(requests, method.lower(), None)
+            if fn is not None:
+                resp = fn(url, headers=headers, **kwargs)
+            else:
+                resp = requests.request(method, url, headers=headers, **kwargs)
+
+            # Automatic Token refresh on 401 Unauthorized
+            if resp.status_code == 401 and self.team_id:
                 try:
-                    from backend.oauth import oauth_manager
-                except ImportError:
-                    from oauth import oauth_manager
-                new_token = oauth_manager.refresh_access_token(self.team_id)
-                if new_token:
-                    self.access_token = new_token
-                    retry_headers = self.headers
-                    if fn is not None:
-                        resp = fn(url, headers=retry_headers, **kwargs)
-                    else:
-                        resp = requests.request(method, url, headers=retry_headers, **kwargs)
-            except Exception as e:
-                print(f"[MiroClient] Token refresh failed: {e}")
+                    try:
+                        from backend.oauth import oauth_manager
+                    except ImportError:
+                        from oauth import oauth_manager
+                    new_token = oauth_manager.refresh_access_token(self.team_id)
+                    if new_token:
+                        self.access_token = new_token
+                        headers = self.headers
+                        continue
+                except Exception as e:
+                    print(f"[MiroClient] Token refresh failed: {e}")
+
+            # Rate limit backoff on 429 or transient 502/503/504 errors
+            if resp.status_code in (429, 502, 503, 504) and attempt <= max_retries:
+                retry_after = resp.headers.get("Retry-After")
+                if retry_after and retry_after.isdigit():
+                    delay = float(retry_after) + random.uniform(0.1, 0.5)
+                else:
+                    delay = min(6.0, (1.5 ** attempt) + random.uniform(0.1, 0.4))
+                time.sleep(delay)
+                continue
+
+            break
+
         return resp
 
 
