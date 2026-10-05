@@ -45,9 +45,9 @@ SECRET_PATTERNS = [
 ]
 
 FORBIDDEN_SYSTEM_PATHS = {
-    "/etc", "/var", "/proc", "/sys", "/dev", "/root", "/boot", "/bin", "/sbin",
+    "/etc", "/proc", "/sys", "/dev", "/root", "/boot", "/bin", "/sbin",
     "/usr", "/usr/bin", "/usr/sbin", "/Library", "/System",
-    "/private/etc", "/private/var", "/private/tmp",
+    "/private/etc", "/var/log", "/var/mail", "/var/spool", "/var/db",
     "C:\\Windows", "C:\\Program Files", "C:\\Program Files (x86)"
 }
 
@@ -56,10 +56,17 @@ def is_safe_scan_path(path: Path) -> bool:
     try:
         resolved = path.resolve()
         resolved_str = str(resolved).lower()
+
+        # Explicitly allow authorized temporary directories used for repo extraction
+        system_temp = Path(tempfile.gettempdir()).resolve()
+        if resolved == system_temp or system_temp in resolved.parents:
+            return True
+
         for forbidden in FORBIDDEN_SYSTEM_PATHS:
             f_norm = str(Path(forbidden).resolve()).lower() if Path(forbidden).exists() else forbidden.lower()
             if resolved_str == f_norm or resolved_str.startswith(f_norm + os.sep) or resolved_str == forbidden.lower() or resolved_str.startswith(forbidden.lower() + os.sep):
                 return False
+
         # Disallow scanning home directory root itself or sensitive user directories
         home = Path.home().resolve()
         if resolved == home:
