@@ -748,7 +748,7 @@ function clearSecureSettings() {
               setCurrentStep(4); // 4. Done
               setArchitecture(data.architecture);
               setUsage(data.usage);
-              setShowReasoning(false);
+              setShowReasoning(true);
 
               // Trigger confetti celebration
               confetti({
@@ -790,7 +790,7 @@ function clearSecureSettings() {
             setCurrentStep(4);
             setArchitecture(data.architecture);
             setUsage(data.usage);
-            setShowReasoning(false);
+            setShowReasoning(true);
             if (autoSyncMiro) executeMiroSync(data.architecture);
           }
         } catch (e) {}
@@ -819,7 +819,7 @@ function clearSecureSettings() {
           if (directData.success && directData.architecture) {
             setArchitecture(directData.architecture);
             setUsage(directData.usage || {});
-            setShowReasoning(false);
+            setShowReasoning(true);
             setCurrentStep(4);
             if (autoSyncMiro) executeMiroSync(directData.architecture);
           }

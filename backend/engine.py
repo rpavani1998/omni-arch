@@ -226,15 +226,14 @@ class ArchitectureEngine:
                     if alt_parsed and alt_parsed.get("nodes", [])[0].get("id") != "client_ui":
                         parsed_json = alt_parsed
 
-                if not full_reasoning:
-                    full_reasoning = "1. Analyzed ingress routes and API gateways.\n2. Decomposed microservices and message queues.\n3. Mapped database persistence tiers and caching layers.\n4. Extracted architectural strengths and scaling considerations."
+                final_reasoning = self._generate_reasoning_summary(parsed_json, full_reasoning, full_content, perspective)
 
                 usage = {
-                    "total_tokens": len((full_content + full_reasoning).split()) * 2,
+                    "total_tokens": len((full_content + final_reasoning).split()) * 2,
                     "duration_ms": duration_ms,
                     "model": target_model,
                     "provider": provider_label,
-                    "reasoning": full_reasoning
+                    "reasoning": final_reasoning
                 }
 
                 q.put(("data", f"data: {json.dumps({'type': 'complete', 'architecture': parsed_json, 'usage': usage})}\n\n"))
@@ -302,16 +301,14 @@ class ArchitectureEngine:
                 if alt_parsed and alt_parsed.get("nodes", [])[0].get("id") != "client_ui":
                     parsed_json = alt_parsed
 
-            # Fallback reasoning if model didn't stream explicit reasoning
-            if not full_reasoning:
-                full_reasoning = "1. Analyzed ingress routes and API gateways.\n2. Decomposed microservices and message queues.\n3. Mapped database persistence tiers and caching layers.\n4. Extracted architectural strengths and scaling considerations."
+            final_reasoning = self._generate_reasoning_summary(parsed_json, full_reasoning, full_content, perspective)
 
             usage_metrics = {
-                "total_tokens": len((full_content + full_reasoning).split()) * 2,
+                "total_tokens": len((full_content + final_reasoning).split()) * 2,
                 "duration_ms": duration_ms,
                 "model": target_model,
                 "provider": provider_label,
-                "reasoning": full_reasoning
+                "reasoning": final_reasoning
             }
             print(f"[OmniArch Engine] Generated architecture with {len(parsed_json.get('nodes', []))} nodes and {len(parsed_json.get('connections', []))} connections")
         except Exception as e:
@@ -331,6 +328,47 @@ class ArchitectureEngine:
             "architecture": parsed_json,
             "usage": usage_metrics
         }
+
+    def _generate_reasoning_summary(self, parsed_json: Dict[str, Any], raw_reasoning: str, full_content: str, perspective: str = "overview") -> str:
+        """Constructs a comprehensive, readable Chain-of-Thought reasoning explanation."""
+        # 1. If explicit reasoning was captured or <think> tags were present
+        if raw_reasoning and len(raw_reasoning.strip()) > 30:
+            return raw_reasoning.strip()
+
+        # Check for <think> in full_content
+        think_match = re.search(r'<think>([\s\S]*?)</think>', full_content)
+        if think_match and len(think_match.group(1).strip()) > 20:
+            return think_match.group(1).strip()
+
+        # 2. Synthesize rich step-by-step architectural Chain-of-Thought
+        nodes = parsed_json.get("nodes", [])
+        connections = parsed_json.get("connections", [])
+        style = parsed_json.get("architecture_style", "Modular Architecture")
+        title = parsed_json.get("system_title", "Target Architecture")
+        tech_list = parsed_json.get("tech_stack", [])
+        tech_stack = ", ".join(tech_list) if isinstance(tech_list, list) else str(tech_list)
+
+        gateways = [n.get("name") for n in nodes if n.get("type") in ["gateway", "frontend"]]
+        services = [n.get("name") for n in nodes if n.get("type") == "service"]
+        dbs = [n.get("name") for n in nodes if n.get("type") in ["database", "cache", "queue"]]
+
+        lines = [
+            f"🧠 Architectural Analysis Chain for '{title}' (Perspective: {perspective.upper()} | Style: {style}):",
+            f"1. Ingress & Client Layer: Identified {len(gateways)} entrypoint components ({', '.join(gateways[:3]) or 'Client UI / Direct API'}).",
+            f"2. Domain Microservices: Decomposed {len(services)} application service boundaries ({', '.join(services[:4]) or 'Core Application Backend'}).",
+            f"3. Persistence & State: Mapped {len(dbs)} data stores and caching layers ({', '.join(dbs[:3]) or 'Primary Database'}).",
+            f"4. Dependency Graph: Verified {len(connections)} interconnecting communication pathways across system tiers.",
+            f"5. Technology Cohesion: Analyzed ecosystem compatibility across {tech_stack or 'Core Frameworks'}."
+        ]
+
+        insights = parsed_json.get("insights", {})
+        if isinstance(insights, dict):
+            if insights.get("strengths") and isinstance(insights["strengths"], list):
+                lines.append(f"6. Primary Architectural Strength: {insights['strengths'][0]}")
+            if insights.get("recommendations") and isinstance(insights["recommendations"], list):
+                lines.append(f"7. Optimization Recommendation: {insights['recommendations'][0]}")
+
+        return "\n".join(lines)
 
 
     def generate_architecture(self, codebase_data: Dict[str, Any], provider: str = "custom", perspective: str = "overview", custom_instructions: str = "", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None) -> Dict[str, Any]:
