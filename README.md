@@ -1,6 +1,6 @@
 # OmniArch — Universal Codebase to Miro Architecture Engine
 
-> 🏆 **Born & Won 1st Place at the Miro x Qwen AI Hackathon / Meetup**  
+> 🏆 **Born & Won at the [Miro x Qwen x Kramer's Community Buildathon](https://lu.ma/biyq38x0) (Hyderabad)**  
 > Originally created as **QwenArch** (`qwen-arch-canvas`) to connect Alibaba Qwen with Miro's infinite canvas, OmniArch has evolved into a **Universal Living Architecture Engine & Plugin** supporting any model (Qwen, OpenAI, DeepSeek, Claude, Groq, Local Ollama) with zero lock-in and complete **BYOK (Bring Your Own Keys)** flexibility.
 
 OmniArch bridges software codebases and visual system design. It extracts AST signatures (REST routes, models, message brokers, dependencies) with zero code retention, feeds them into your chosen reasoning LLM, and renders editable, presentation-grade C4 architecture diagrams directly on Miro boards.
@@ -9,7 +9,7 @@ OmniArch bridges software codebases and visual system design. It extracts AST si
 
 ## 🌟 The Origin & Evolution
 
-1. **Phase 1 (The Hackathon Winner):** Built during the **Miro x Qwen Meetup & Hackathon**, *QwenArch* proved that Alibaba Qwen 2.5 Coder & Qwen 3.8 could analyze whole codebases in seconds and translate them into native Miro vector shapes, sticky notes, and orthogonal connectors.
+1. **Phase 1 (The Hackathon Winner):** Built and won during the **[Miro x Qwen Meetup & Buildathon](https://lu.ma/biyq38x0)**, *QwenArch* proved that Alibaba Qwen 2.5 Coder & Qwen 3.8 could analyze whole codebases in seconds and translate them into native Miro vector shapes, sticky notes, and orthogonal connectors.
 2. **Phase 2 (Universal Multi-Model Plugin):** Extended the core architecture into **OmniArch** — an open, universal plugin architecture. Developers can now plug in **any LLM provider** (ModelScope, OpenAI, DeepSeek, Anthropic Claude via OpenRouter, Groq, or private local Ollama) using standard OpenAI-compatible endpoints.
 3. **Phase 3 (Enterprise BYOK & CI/CD Bot):** Added a true **BYOK (Bring Your Own Key)** model. Plug in your own Miro workspace access tokens and LLM API keys. Run via interactive in-canvas Miro Web SDK v2 or headless via our **GitHub Action** on every pull request.
 
