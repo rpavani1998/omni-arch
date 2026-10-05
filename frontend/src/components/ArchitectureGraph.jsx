@@ -13,57 +13,16 @@ import {
   Plug,
   Code2
 } from 'lucide-react';
+import { NODE_TYPE_STYLES } from '../nodeStyles';
 
-const TYPE_CONFIG = {
-  frontend: { 
-    border: '#0071e3', 
-    badgeBg: 'rgba(0, 113, 227, 0.12)', 
-    badgeText: '#0071e3', 
-    label: 'Client / UI', 
-    icon: Globe 
-  },
-  gateway: { 
-    border: '#af52de', 
-    badgeBg: 'rgba(175, 82, 222, 0.12)', 
-    badgeText: '#af52de', 
-    label: 'Gateway', 
-    icon: ShieldCheck 
-  },
-  service: { 
-    border: '#34c759', 
-    badgeBg: 'rgba(52, 199, 89, 0.12)', 
-    badgeText: '#34c759', 
-    label: 'Service', 
-    icon: Server 
-  },
-  database: { 
-    border: '#ff9f0a', 
-    badgeBg: 'rgba(255, 159, 10, 0.12)', 
-    badgeText: '#ff9f0a', 
-    label: 'Database', 
-    icon: Database 
-  },
-  cache: { 
-    border: '#ff3b30', 
-    badgeBg: 'rgba(255, 59, 48, 0.12)', 
-    badgeText: '#ff3b30', 
-    label: 'Cache', 
-    icon: Zap 
-  },
-  queue: { 
-    border: '#5856d6', 
-    badgeBg: 'rgba(88, 86, 214, 0.12)', 
-    badgeText: '#5856d6', 
-    label: 'Event Queue', 
-    icon: Inbox 
-  },
-  external: { 
-    border: '#8e8e93', 
-    badgeBg: 'rgba(142, 142, 147, 0.12)', 
-    badgeText: '#8e8e93', 
-    label: 'External API', 
-    icon: Plug 
-  }
+const ICON_MAP = {
+  frontend: Globe,
+  gateway: ShieldCheck,
+  service: Server,
+  database: Database,
+  cache: Zap,
+  queue: Inbox,
+  external: Plug,
 };
 
 export default function ArchitectureGraph({ architecture, onScaffold }) {
@@ -100,8 +59,8 @@ export default function ArchitectureGraph({ architecture, onScaffold }) {
               
               <div className="layer-nodes-stack">
                 {layerNodes.map(node => {
-                  const style = TYPE_CONFIG[node.type] || TYPE_CONFIG.service;
-                  const IconComp = style.icon;
+                  const style = NODE_TYPE_STYLES[node.type] || NODE_TYPE_STYLES.service;
+                  const IconComp = ICON_MAP[node.type] || ICON_MAP.service;
 
                   return (
                     <div

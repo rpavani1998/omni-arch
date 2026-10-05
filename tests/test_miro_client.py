@@ -1,16 +1,17 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from backend.miro_client import MiroClient, TYPE_STYLES
+from backend.miro_client import MiroClient
+from backend.node_styles import NODE_TYPE_STYLES
 
 class TestMiroClient(unittest.TestCase):
     def setUp(self):
         self.client = MiroClient(access_token="mock_token_123", board_id="mock_board_456")
 
     def test_type_styles_available(self):
-        self.assertIn("frontend", TYPE_STYLES)
-        self.assertIn("service", TYPE_STYLES)
-        self.assertIn("database", TYPE_STYLES)
-        self.assertIn("cache", TYPE_STYLES)
+        self.assertIn("frontend", NODE_TYPE_STYLES)
+        self.assertIn("service", NODE_TYPE_STYLES)
+        self.assertIn("database", NODE_TYPE_STYLES)
+        self.assertIn("cache", NODE_TYPE_STYLES)
 
     def test_sync_architecture_diagram_initial_creation(self):
         arch_data = {

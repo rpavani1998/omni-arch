@@ -4,50 +4,12 @@ import re
 from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 
-load_dotenv()
+try:
+    from backend.node_styles import NODE_TYPE_STYLES, get_style
+except ImportError:
+    from node_styles import NODE_TYPE_STYLES, get_style
 
-TYPE_STYLES = {
-    "header": {
-        "shape": "round_rectangle",
-        "fillColor": "#f8fafc",   # Slate 50
-        "borderColor": "#cbd5e1", # Slate 300
-    },
-    "frontend": {
-        "shape": "round_rectangle",
-        "fillColor": "#e0f2fe",  # Sky 100
-        "borderColor": "#0284c7", # Sky 600
-    },
-    "gateway": {
-        "shape": "round_rectangle",
-        "fillColor": "#f3e8ff",  # Purple 100
-        "borderColor": "#9333ea", # Purple 600
-    },
-    "service": {
-        "shape": "round_rectangle",
-        "fillColor": "#ecfdf5",  # Emerald 100
-        "borderColor": "#059669", # Emerald 600
-    },
-    "database": {
-        "shape": "round_rectangle",
-        "fillColor": "#fef3c7",  # Amber 100
-        "borderColor": "#d97706", # Amber 600
-    },
-    "cache": {
-        "shape": "round_rectangle",
-        "fillColor": "#ffe4e6",  # Rose 100
-        "borderColor": "#e11d48", # Rose 600
-    },
-    "queue": {
-        "shape": "round_rectangle",
-        "fillColor": "#e0e7ff",  # Indigo 100
-        "borderColor": "#4f46e5", # Indigo 600
-    },
-    "external": {
-        "shape": "round_rectangle",
-        "fillColor": "#f1f5f9",  # Slate 100
-        "borderColor": "#64748b", # Slate 500
-    }
-}
+load_dotenv()
 
 class MiroClient:
     def __init__(self, access_token: Optional[str] = None, board_id: Optional[str] = None, team_id: Optional[str] = None):
@@ -167,7 +129,7 @@ class MiroClient:
 
     def create_shape(self, content: str, x: float, y: float, shape_type: str = "service", width: float = 300, height: float = 140) -> Dict[str, Any]:
         url = f"{self.base_url}/boards/{self.board_id}/shapes"
-        style_cfg = TYPE_STYLES.get(shape_type, TYPE_STYLES["service"])
+        style_cfg = NODE_TYPE_STYLES.get(shape_type, NODE_TYPE_STYLES["service"])
 
         payload = {
             "data": {
@@ -207,7 +169,7 @@ class MiroClient:
     ) -> Optional[Dict[str, Any]]:
         """Updates an existing shape in-place without deleting or re-creating it."""
         url = f"{self.base_url}/boards/{self.board_id}/shapes/{shape_id}"
-        style_cfg = TYPE_STYLES.get(shape_type, TYPE_STYLES["service"])
+        style_cfg = NODE_TYPE_STYLES.get(shape_type, NODE_TYPE_STYLES["service"])
 
         payload: Dict[str, Any] = {
             "style": {
