@@ -11,11 +11,13 @@ inputs:
     required: false
     default: '${{ github.token }}'
   miro-access-token:
-    description: 'Miro REST API Access Token with boards:write permissions'
-    required: true
+    description: 'Miro REST API Access Token with boards:write permissions (optional for offline analysis)'
+    required: false
+    default: ''
   miro-board-id:
-    description: 'Target Miro Board ID to synchronize diagrams into'
-    required: true
+    description: 'Target Miro Board ID to synchronize diagrams into (optional for offline analysis)'
+    required: false
+    default: ''
   perspective:
     description: 'SDLC Perspective: overview, data_flow, database_storage, devops_pipeline, security_auth, async_workers, observability, ai_rag'
     required: false
@@ -107,19 +109,36 @@ runs:
             custom_instructions=os.getenv("INPUT_CUSTOM_INSTRUCTIONS", "")
         )
         
-        print(f"[3/4] Synchronizing to Miro Board: {os.getenv('MIRO_BOARD_ID')}...")
-        client = MiroClient(
-            access_token=os.getenv("MIRO_ACCESS_TOKEN"),
-            board_id=os.getenv("MIRO_BOARD_ID")
-        )
-        sync_result = client.sync_architecture_diagram(
-            arch_data=arch_data,
-            perspective=os.getenv("INPUT_PERSPECTIVE", "overview")
-        )
+        miro_token = os.getenv("MIRO_ACCESS_TOKEN")
+        miro_board = os.getenv("MIRO_BOARD_ID")
         
-        board_url = sync_result.get("board_url", "")
-        frame_id = sync_result.get("frame_id", "")
-        print(f"[SUCCESS] Miro Frame Sync Complete! Deep Link: {board_url}")
+        if miro_token and miro_board:
+            print(f"[3/4] Synchronizing to Miro Board: {miro_board}...")
+            client = MiroClient(
+                access_token=miro_token,
+                board_id=miro_board
+            )
+            sync_result = client.sync_architecture_diagram(
+                arch_data=arch_data,
+                perspective=os.getenv("INPUT_PERSPECTIVE", "overview")
+            )
+            board_url = sync_result.get("board_url", "")
+            frame_id = sync_result.get("frame_id", "")
+            print(f"[SUCCESS] Miro Frame Sync Complete! Deep Link: {board_url}")
+        else:
+            print("[3/4] [INFO] MIRO_ACCESS_TOKEN or MIRO_BOARD_ID not provided. Generating architecture preview in offline mode.")
+            sync_result = {
+                "success": True,
+                "created_nodes": len(arch_data.get("nodes", [])),
+                "updated_nodes": 0,
+                "deleted_nodes": 0,
+                "total_items": len(arch_data.get("nodes", [])),
+                "frame_title": f"System Architecture ({os.getenv('INPUT_PERSPECTIVE', 'overview')})",
+                "board_url": "https://miro.com (Offline Mode - set MIRO_ACCESS_TOKEN to sync live)",
+                "frame_id": "offline_mode"
+            }
+            board_url = sync_result["board_url"]
+            frame_id = sync_result["frame_id"]
 
         print("[4/4] Checking Architectural Drift & Posting PR Review Comment...")
         
