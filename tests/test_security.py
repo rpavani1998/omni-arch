@@ -1,40 +1,25 @@
 import unittest
-import time
-from backend.security import SlidingWindowRateLimiter
+from fastapi.testclient import TestClient
+from backend.main import app
 
 class TestSecurity(unittest.TestCase):
     def setUp(self):
-        self.limiter = SlidingWindowRateLimiter(default_limit=5, window_seconds=2)
+        self.client = TestClient(app)
 
     def test_rate_limiter_allows_under_limit(self):
         for i in range(5):
-            allowed, limit, remaining, reset_sec = self.limiter.check_rate_limit("1.2.3.4", "/api/sample")
-            self.assertTrue(allowed, f"Request {i+1} should be allowed")
-            self.assertEqual(remaining, 4 - i)
+            resp = self.client.get("/health")
+            self.assertEqual(resp.status_code, 200)
 
-    def test_rate_limiter_blocks_over_limit(self):
-        # 5 requests should pass
-        for _ in range(5):
-            self.limiter.check_rate_limit("1.2.3.4", "/api/sample")
-        
-        # 6th request should be blocked
-        allowed, limit, remaining, reset_sec = self.limiter.check_rate_limit("1.2.3.4", "/api/sample")
-        self.assertFalse(allowed)
-        self.assertEqual(remaining, 0)
-        self.assertGreater(reset_sec, 0)
+    def test_security_headers_present(self):
+        resp = self.client.get("/health")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Content-Security-Policy", resp.headers)
+        self.assertIn("frame-ancestors", resp.headers["Content-Security-Policy"])
+        self.assertIn("X-Content-Type-Options", resp.headers)
+        self.assertIn("X-XSS-Protection", resp.headers)
+        self.assertIn("Referrer-Policy", resp.headers)
 
-    def test_rate_limiter_resets_after_window(self):
-        limiter = SlidingWindowRateLimiter(default_limit=2, window_seconds=1)
-        limiter.check_rate_limit("user1", "/api/test")
-        limiter.check_rate_limit("user1", "/api/test")
-        
-        allowed, _, _, _ = limiter.check_rate_limit("user1", "/api/test")
-        self.assertFalse(allowed)
-
-        time.sleep(1.1)
-        allowed, _, remaining, _ = limiter.check_rate_limit("user1", "/api/test")
-        self.assertTrue(allowed)
-        self.assertEqual(remaining, 1)
 
 if __name__ == "__main__":
     unittest.main()

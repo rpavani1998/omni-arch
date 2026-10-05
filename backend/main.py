@@ -1,22 +1,25 @@
 import os
 from typing import Dict, Any, Optional, List
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 try:
     from backend.analyzer import CodebaseAnalyzer
     from backend.engine import ArchitectureEngine
     from backend.miro_client import MiroClient
-    from backend.security import SecurityAndTelemetryMiddleware
+    from backend.security import SecurityAndTelemetryMiddleware, get_rate_limit_for_path
     from backend.oauth import oauth_manager, installation_store
 except ImportError:
     from analyzer import CodebaseAnalyzer
     from engine import ArchitectureEngine
     from miro_client import MiroClient
-    from security import SecurityAndTelemetryMiddleware
+    from security import SecurityAndTelemetryMiddleware, get_rate_limit_for_path
     from oauth import oauth_manager, installation_store
 
 
@@ -24,7 +27,12 @@ load_dotenv()
 
 app = FastAPI(title="OmniArch API", description="Universal Codebase to Miro Architecture Engine powered by Multi-Model AI")
 
-# Security & Telemetry Middleware (Rate Limiting, HSTS, CSP, Latency Logging)
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Security & Telemetry Middleware (HSTS, CSP, Latency Logging)
 app.add_middleware(SecurityAndTelemetryMiddleware)
 
 app.add_middleware(
@@ -131,7 +139,8 @@ def health():
 
 @router.get("/board-info")
 @router.post("/board-info")
-def get_board_info(access_token: Optional[str] = None, board_id: Optional[str] = None, team_id: Optional[str] = None, req: Optional[BoardInfoRequest] = None):
+@limiter.limit("60/minute")
+def get_board_info(request: Request, access_token: Optional[str] = None, board_id: Optional[str] = None, team_id: Optional[str] = None, req: Optional[BoardInfoRequest] = None):
     try:
         t_id = (req.team_id if req else None) or team_id
         inst = installation_store.get_installation(t_id) if t_id else None
@@ -152,11 +161,13 @@ def get_board_info(access_token: Optional[str] = None, board_id: Optional[str] =
         return {"success": False, "error": str(e)}
 
 @router.get("/sample-repos")
-def get_sample_repos():
+@limiter.limit("60/minute")
+def get_sample_repos(request: Request):
     return SAMPLE_REPOS
 
 @router.post("/analyze")
-def analyze_codebase(req: AnalyzeRequest):
+@limiter.limit("10/minute")
+def analyze_codebase(request: Request, req: AnalyzeRequest):
     try:
         if req.source_type == "github":
             codebase_data = CodebaseAnalyzer.fetch_github_repo(req.source_value, github_token=req.github_token)
@@ -191,7 +202,8 @@ def analyze_codebase(req: AnalyzeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/analyze-stream")
-def analyze_codebase_stream(req: AnalyzeRequest):
+@limiter.limit("10/minute")
+def analyze_codebase_stream(request: Request, req: AnalyzeRequest):
     try:
         if req.source_type == "github":
             codebase_data = CodebaseAnalyzer.fetch_github_repo(req.source_value, github_token=req.github_token)
@@ -235,7 +247,8 @@ class ScaffoldRequest(BaseModel):
     model_name: Optional[str] = None
 
 @router.post("/scaffold")
-def scaffold_component(req: ScaffoldRequest):
+@limiter.limit("15/minute")
+def scaffold_component(request: Request, req: ScaffoldRequest):
     try:
         boilerplate = engine.scaffold_component_boilerplate(
             component_name=req.component_name,
@@ -256,7 +269,8 @@ def scaffold_component(req: ScaffoldRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/sync-miro")
-def sync_to_miro(req: SyncMiroRequest):
+@limiter.limit("20/minute")
+def sync_to_miro(request: Request, req: SyncMiroRequest):
     try:
         inst = installation_store.get_installation(req.team_id) if req.team_id else None
         token = req.access_token or (inst.get("access_token") if inst else None)
@@ -285,7 +299,8 @@ def oauth_authorize(team_id: Optional[str] = None, redirect: bool = False):
     return auth_data
 
 @router.get("/oauth/callback")
-def oauth_callback(code: str, state: str):
+@limiter.limit("10/minute")
+def oauth_callback(request: Request, code: str, state: str):
     if not oauth_manager.validate_state(state):
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth CSRF state parameter.")
     try:
