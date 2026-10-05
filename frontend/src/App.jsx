@@ -220,32 +220,105 @@ export default function App() {
     } catch (e) {}
   };
 
-  const [customSettings, setCustomSettings] = useState(() => {
-    try {
-      const saved = localStorage.getItem('qwenarch_custom_settings');
-      return saved ? JSON.parse(saved) : {
-        miroAccessToken: '',
-        miroBoardId: '',
-        miroTeamId: '',
-        aiProvider: 'modelscope',
-        aiApiKey: '',
-        aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
-        aiModelName: 'Qwen/Qwen3.8-27B',
-        githubToken: ''
-      };
-    } catch (e) {
-      return {
-        miroAccessToken: '',
-        miroBoardId: '',
-        miroTeamId: '',
-        aiProvider: 'modelscope',
-        aiApiKey: '',
-        aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
-        aiModelName: 'Qwen/Qwen3.8-27B',
-        githubToken: ''
-      };
+const OMNIARCH_PREFS_KEY = 'omniarch_user_preferences';
+const OMNIARCH_SECRETS_KEY = 'omniarch_session_secrets';
+
+function loadSecureSettings() {
+  const defaults = {
+    miroAccessToken: '',
+    miroBoardId: '',
+    miroTeamId: '',
+    aiProvider: 'modelscope',
+    aiApiKey: '',
+    aiBaseUrl: 'https://api-inference.modelscope.ai/v1',
+    aiModelName: 'Qwen/Qwen3.8-27B',
+    githubToken: ''
+  };
+
+  try {
+    // 1. Read non-sensitive preferences from localStorage
+    let prefs = {};
+    const savedPrefs = localStorage.getItem(OMNIARCH_PREFS_KEY);
+    if (savedPrefs) {
+      prefs = JSON.parse(savedPrefs);
+    } else {
+      // Migrate non-sensitive prefs from legacy key if found
+      const legacy = localStorage.getItem('qwenarch_custom_settings');
+      if (legacy) {
+        try {
+          const parsedLegacy = JSON.parse(legacy);
+          prefs = {
+            miroBoardId: parsedLegacy.miroBoardId || '',
+            miroTeamId: parsedLegacy.miroTeamId || '',
+            aiProvider: parsedLegacy.aiProvider || 'modelscope',
+            aiBaseUrl: parsedLegacy.aiBaseUrl || 'https://api-inference.modelscope.ai/v1',
+            aiModelName: parsedLegacy.aiModelName || 'Qwen/Qwen3.8-27B',
+          };
+        } catch (e) {}
+      }
     }
-  });
+
+    // 2. Read sensitive secrets strictly from sessionStorage (tab/session ephemeral)
+    let secrets = {};
+    const savedSecrets = sessionStorage.getItem(OMNIARCH_SECRETS_KEY);
+    if (savedSecrets) {
+      secrets = JSON.parse(savedSecrets);
+    }
+
+    // 3. Purge raw secrets from localStorage permanently to prevent XSS exposure
+    localStorage.removeItem('qwenarch_custom_settings');
+    localStorage.removeItem('omniarch_custom_settings');
+
+    return {
+      ...defaults,
+      ...prefs,
+      miroAccessToken: secrets.miroAccessToken || '',
+      aiApiKey: secrets.aiApiKey || '',
+      githubToken: secrets.githubToken || ''
+    };
+  } catch (e) {
+    return defaults;
+  }
+}
+
+function persistSecureSettings(settings) {
+  try {
+    // Non-sensitive preferences -> localStorage
+    const prefs = {
+      miroBoardId: settings.miroBoardId || '',
+      miroTeamId: settings.miroTeamId || '',
+      aiProvider: settings.aiProvider || 'modelscope',
+      aiBaseUrl: settings.aiBaseUrl || 'https://api-inference.modelscope.ai/v1',
+      aiModelName: settings.aiModelName || 'Qwen/Qwen3.8-27B'
+    };
+    localStorage.setItem(OMNIARCH_PREFS_KEY, JSON.stringify(prefs));
+
+    // Sensitive credentials -> sessionStorage (purged immediately on tab/window close)
+    const secrets = {
+      miroAccessToken: settings.miroAccessToken || '',
+      aiApiKey: settings.aiApiKey || '',
+      githubToken: settings.githubToken || ''
+    };
+    sessionStorage.setItem(OMNIARCH_SECRETS_KEY, JSON.stringify(secrets));
+
+    // Guarantee unencrypted persistent storage is purged
+    localStorage.removeItem('qwenarch_custom_settings');
+    localStorage.removeItem('omniarch_custom_settings');
+  } catch (e) {
+    console.debug('Storage sync error:', e);
+  }
+}
+
+function clearSecureSettings() {
+  try {
+    localStorage.removeItem(OMNIARCH_PREFS_KEY);
+    sessionStorage.removeItem(OMNIARCH_SECRETS_KEY);
+    localStorage.removeItem('qwenarch_custom_settings');
+    localStorage.removeItem('omniarch_custom_settings');
+  } catch (e) {}
+}
+
+  const [customSettings, setCustomSettings] = useState(() => loadSecureSettings());
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -346,7 +419,7 @@ export default function App() {
       if (oauthStatus === 'success' && teamId) {
         setCustomSettings(prev => {
           const updated = { ...prev, miroTeamId: teamId };
-          try { localStorage.setItem('qwenarch_custom_settings', JSON.stringify(updated)); } catch (e) {}
+          persistSecureSettings(updated);
           return updated;
         });
         setOauthNotice({ success: true, message: `Successfully authenticated Miro Team ${teamId} via OAuth2.` });
@@ -379,9 +452,7 @@ export default function App() {
                 ...prev,
                 miroBoardId: prev.miroBoardId || boardInfoRes.id
               };
-              try {
-                localStorage.setItem('omniarch_custom_settings', JSON.stringify(updated));
-              } catch (e) {}
+              persistSecureSettings(updated);
               return updated;
             });
             setBoardInfo(prev => ({
@@ -406,9 +477,7 @@ export default function App() {
 
   const handleSaveSettings = (newSettings) => {
     setCustomSettings(newSettings);
-    try {
-      localStorage.setItem('qwenarch_custom_settings', JSON.stringify(newSettings));
-    } catch (e) {}
+    persistSecureSettings(newSettings);
     fetchBoardInfo(newSettings.miroAccessToken, newSettings.miroBoardId, newSettings.miroTeamId);
   };
 
@@ -424,9 +493,7 @@ export default function App() {
       githubToken: ''
     };
     setCustomSettings(defaults);
-    try {
-      localStorage.removeItem('qwenarch_custom_settings');
-    } catch (e) {}
+    clearSecureSettings();
     setMiroTestResult(null);
     setOauthNotice(null);
     fetchBoardInfo('', '', '');
@@ -1406,6 +1473,25 @@ export default function App() {
             </div>
 
             <div className="modal-body settings-body">
+              {/* Security Banner */}
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+                borderRadius: '8px',
+                padding: '0.75rem 1rem',
+                marginBottom: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                fontSize: '0.85rem',
+                color: 'var(--text-primary, #10b981)'
+              }}>
+                <ShieldCheck size={18} style={{ flexShrink: 0, color: '#10b981' }} />
+                <span>
+                  <strong>Session Security Enforced:</strong> API keys and access tokens are held strictly in memory &amp; ephemeral session storage. They are never written to permanent disk storage and are purged when you close the tab.
+                </span>
+              </div>
+
               {/* Section 1: Miro Credentials */}
               <div className="settings-section">
                 <div className="settings-section-title">

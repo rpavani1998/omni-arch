@@ -176,68 +176,84 @@ class ArchitectureEngine:
         return client, model, provider_label
 
 
-    def stream_architecture_analysis(self, codebase_data: Dict[str, Any], provider: str = "modelscope", perspective: str = "overview", custom_instructions: str = "", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None):
-        """Streams reasoning tokens in real-time, then yields complete architecture JSON."""
+    async def stream_architecture_analysis(self, codebase_data: Dict[str, Any], provider: str = "modelscope", perspective: str = "overview", custom_instructions: str = "", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None):
+        """Streams reasoning tokens and architecture JSON asynchronously without blocking the FastAPI event loop."""
+        import asyncio
         import time
+        from queue import Queue
+        from threading import Thread
+
+        q: Queue = Queue()
         start_time = time.time()
-        client, target_model, provider_label = self._get_client_and_model(provider, api_key, base_url, model_name)
-        user_message = self._build_context(codebase_data, perspective, custom_instructions)
 
-        try:
-            stream = client.chat.completions.create(
-                model=target_model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_message}
-                ],
-                temperature=0.2,
-                max_tokens=4096,
-                stream=True
-            )
+        def sync_worker():
+            try:
+                client, target_model, provider_label = self._get_client_and_model(provider, api_key, base_url, model_name)
+                user_message = self._build_context(codebase_data, perspective, custom_instructions)
+                stream = client.chat.completions.create(
+                    model=target_model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_message}
+                    ],
+                    temperature=0.2,
+                    max_tokens=4096,
+                    stream=True
+                )
 
-            full_content = ""
-            full_reasoning = ""
+                full_content = ""
+                full_reasoning = ""
 
-            for chunk in stream:
-                if chunk.choices and len(chunk.choices) > 0:
-                    delta = chunk.choices[0].delta
-                    reasoning_chunk = getattr(delta, "reasoning_content", None) or ""
-                    content_chunk = getattr(delta, "content", None) or ""
+                for chunk in stream:
+                    if chunk.choices and len(chunk.choices) > 0:
+                        delta = chunk.choices[0].delta
+                        reasoning_chunk = getattr(delta, "reasoning_content", None) or ""
+                        content_chunk = getattr(delta, "content", None) or ""
 
-                    if reasoning_chunk:
-                        full_reasoning += reasoning_chunk
-                        yield f"data: {json.dumps({'type': 'reasoning', 'chunk': reasoning_chunk})}\n\n"
-                    elif content_chunk:
-                        full_content += content_chunk
-                        yield f"data: {json.dumps({'type': 'content', 'chunk': content_chunk})}\n\n"
+                        if reasoning_chunk:
+                            full_reasoning += reasoning_chunk
+                            q.put(("data", f"data: {json.dumps({'type': 'reasoning', 'chunk': reasoning_chunk})}\n\n"))
+                        elif content_chunk:
+                            full_content += content_chunk
+                            q.put(("data", f"data: {json.dumps({'type': 'content', 'chunk': content_chunk})}\n\n"))
 
-            # Parse the final JSON: prioritize content stream first, then reasoning
-            duration_ms = int((time.time() - start_time) * 1000)
-            parsed_json = self._parse_json_response(full_content)
-            
-            # If content didn't parse a custom diagram, try reasoning text
-            if parsed_json.get("nodes", [])[0].get("id") == "client_ui" and full_reasoning and "{" in full_reasoning:
-                alt_parsed = self._parse_json_response(full_reasoning)
-                if alt_parsed and alt_parsed.get("nodes", [])[0].get("id") != "client_ui":
-                    parsed_json = alt_parsed
+                duration_ms = int((time.time() - start_time) * 1000)
+                parsed_json = self._parse_json_response(full_content)
+                
+                # If content didn't parse a custom diagram, try reasoning text
+                if parsed_json.get("nodes", [])[0].get("id") == "client_ui" and full_reasoning and "{" in full_reasoning:
+                    alt_parsed = self._parse_json_response(full_reasoning)
+                    if alt_parsed and alt_parsed.get("nodes", [])[0].get("id") != "client_ui":
+                        parsed_json = alt_parsed
 
-            # Fallback reasoning if model didn't stream explicit reasoning
-            if not full_reasoning:
-                full_reasoning = "1. Analyzed ingress routes and API gateways.\n2. Decomposed microservices and message queues.\n3. Mapped database persistence tiers and caching layers.\n4. Extracted architectural strengths and scaling considerations."
+                if not full_reasoning:
+                    full_reasoning = "1. Analyzed ingress routes and API gateways.\n2. Decomposed microservices and message queues.\n3. Mapped database persistence tiers and caching layers.\n4. Extracted architectural strengths and scaling considerations."
 
-            usage = {
-                "total_tokens": len((full_content + full_reasoning).split()) * 2,
-                "duration_ms": duration_ms,
-                "model": target_model,
-                "provider": provider_label,
-                "reasoning": full_reasoning
-            }
+                usage = {
+                    "total_tokens": len((full_content + full_reasoning).split()) * 2,
+                    "duration_ms": duration_ms,
+                    "model": target_model,
+                    "provider": provider_label,
+                    "reasoning": full_reasoning
+                }
 
-            yield f"data: {json.dumps({'type': 'complete', 'architecture': parsed_json, 'usage': usage})}\n\n"
+                q.put(("data", f"data: {json.dumps({'type': 'complete', 'architecture': parsed_json, 'usage': usage})}\n\n"))
+                q.put(("done", None))
+            except Exception as e:
+                print(f"[ArchitectureEngine] Streaming failed: {e}")
+                q.put(("data", f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"))
+                q.put(("done", None))
 
-        except Exception as e:
-            print(f"[ArchitectureEngine] Streaming failed: {e}")
-            yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+        worker_thread = Thread(target=sync_worker, daemon=True)
+        worker_thread.start()
+
+        while True:
+            item = await asyncio.to_thread(q.get)
+            msg_type, payload = item
+            if msg_type == "done":
+                break
+            elif msg_type == "data":
+                yield payload
 
     def analyze_architecture(self, codebase_data: Dict[str, Any], provider: str = "custom", perspective: str = "overview", custom_instructions: str = "", api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: Optional[str] = None) -> Dict[str, Any]:
         """Calls LLM to deduce architecture from codebase metadata and returns graph + token metrics.

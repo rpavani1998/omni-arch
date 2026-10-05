@@ -181,12 +181,12 @@ def get_sample_repos(request: Request):
 
 @router.post("/analyze")
 @limiter.limit("10/minute")
-def analyze_codebase(request: Request, req: AnalyzeRequest):
+async def analyze_codebase(request: Request, req: AnalyzeRequest):
     try:
         if req.source_type == "github":
-            codebase_data = CodebaseAnalyzer.fetch_github_repo(req.source_value, github_token=req.github_token)
+            codebase_data = await asyncio.to_thread(CodebaseAnalyzer.fetch_github_repo, req.source_value, github_token=req.github_token)
         elif req.source_type == "local":
-            codebase_data = CodebaseAnalyzer.scan_directory(req.source_value)
+            codebase_data = await asyncio.to_thread(CodebaseAnalyzer.scan_directory, req.source_value)
         elif req.source_type == "prompt":
             codebase_data = {
                 "root_name": "Custom System",
@@ -198,7 +198,8 @@ def analyze_codebase(request: Request, req: AnalyzeRequest):
         else:
             raise HTTPException(status_code=400, detail="Invalid source_type")
 
-        analysis_result = engine.analyze_architecture(
+        analysis_result = await asyncio.to_thread(
+            engine.analyze_architecture,
             codebase_data, 
             provider=req.provider or "custom",
             perspective=req.perspective or "overview",
@@ -217,12 +218,12 @@ def analyze_codebase(request: Request, req: AnalyzeRequest):
 
 @router.post("/analyze-stream")
 @limiter.limit("10/minute")
-def analyze_codebase_stream(request: Request, req: AnalyzeRequest):
+async def analyze_codebase_stream(request: Request, req: AnalyzeRequest):
     try:
         if req.source_type == "github":
-            codebase_data = CodebaseAnalyzer.fetch_github_repo(req.source_value, github_token=req.github_token)
+            codebase_data = await asyncio.to_thread(CodebaseAnalyzer.fetch_github_repo, req.source_value, github_token=req.github_token)
         elif req.source_type == "local":
-            codebase_data = CodebaseAnalyzer.scan_directory(req.source_value)
+            codebase_data = await asyncio.to_thread(CodebaseAnalyzer.scan_directory, req.source_value)
         elif req.source_type == "prompt":
             codebase_data = {
                 "root_name": "Custom System",
@@ -262,9 +263,10 @@ class ScaffoldRequest(BaseModel):
 
 @router.post("/scaffold")
 @limiter.limit("15/minute")
-def scaffold_component(request: Request, req: ScaffoldRequest):
+async def scaffold_component(request: Request, req: ScaffoldRequest):
     try:
-        boilerplate = engine.scaffold_component_boilerplate(
+        boilerplate = await asyncio.to_thread(
+            engine.scaffold_component_boilerplate,
             component_name=req.component_name,
             component_type=req.component_type or "service",
             tech=req.tech or "FastAPI",
@@ -284,12 +286,13 @@ def scaffold_component(request: Request, req: ScaffoldRequest):
 
 @router.post("/sync-miro")
 @limiter.limit("20/minute")
-def sync_to_miro(request: Request, req: SyncMiroRequest):
+async def sync_to_miro(request: Request, req: SyncMiroRequest):
     try:
         inst = installation_store.get_installation(req.team_id) if req.team_id else None
         token = req.access_token or (inst.get("access_token") if inst else None)
         client = MiroClient(access_token=token, board_id=req.board_id, team_id=req.team_id) if (token or req.board_id) else miro_client
-        res = client.sync_architecture_diagram(
+        res = await asyncio.to_thread(
+            client.sync_architecture_diagram,
             arch_data=req.architecture,
             start_x=req.offset_x or -300,
             start_y=req.offset_y or -150,
