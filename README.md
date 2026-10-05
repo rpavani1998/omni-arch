@@ -245,5 +245,4 @@ python3 -m unittest discover -s tests -v
 - **License:** MIT License
 - **Privacy Policy:** [PRIVACY.md](PRIVACY.md) / [privacy.html](https://qwenarch-canvas.vercel.app/privacy.html) (Zero codebase storage, 100% ephemeral processing)
 - **Terms of Service:** [TERMS.md](TERMS.md) / [terms.html](https://qwenarch-canvas.vercel.app/terms.html)
-- **Marketplace Submission Manifest:** [MARKETPLACE_SUBMISSION.md](MARKETPLACE_SUBMISSION.md)
 
