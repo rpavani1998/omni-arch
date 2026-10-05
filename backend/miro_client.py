@@ -351,20 +351,21 @@ class MiroClient:
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        # Multi-perspective offset coordinates to maintain separate gallery frames on the same board
+        # Multi-perspective offset coordinates with generous corridors (5500px X / 3500px Y) to eliminate overlapping frames
         PERSPECTIVE_OFFSETS = {
             "overview": {"x": 0, "y": 0, "title": "System Architecture (HLD)"},
-            "data_flow": {"x": 3600, "y": 0, "title": "Request Lifecycle & API Flow"},
-            "database_storage": {"x": 7200, "y": 0, "title": "Data Model & Schema Topology"},
-            "devops_pipeline": {"x": 0, "y": 2400, "title": "CI/CD & DevOps Deployment Pipeline"},
-            "security_auth": {"x": 3600, "y": 2400, "title": "Security & Zero-Trust Auth"},
-            "async_workers": {"x": 7200, "y": 2400, "title": "Async Task Queues & Worker Pipelines"},
-            "observability": {"x": 0, "y": 4800, "title": "Observability & SRE Monitoring"},
-            "ai_rag": {"x": 3600, "y": 4800, "title": "AI / LLM & RAG Pipeline"},
+            "data_flow": {"x": 5500, "y": 0, "title": "Request Lifecycle & API Flow"},
+            "database_storage": {"x": 11000, "y": 0, "title": "Data Model & Schema Topology"},
+            "devops_pipeline": {"x": 0, "y": 3500, "title": "CI/CD & DevOps Deployment Pipeline"},
+            "security_auth": {"x": 5500, "y": 3500, "title": "Security & Zero-Trust Auth"},
+            "async_workers": {"x": 11000, "y": 3500, "title": "Async Task Queues & Worker Pipelines"},
+            "observability": {"x": 0, "y": 7000, "title": "Observability & SRE Monitoring"},
+            "ai_rag": {"x": 5500, "y": 7000, "title": "AI / LLM & RAG Pipeline"},
             # Aliases for compatibility
-            "event_driven": {"x": 7200, "y": 2400, "title": "Async Task Queues & Event Pipelines"},
-            "devops_cloud": {"x": 0, "y": 2400, "title": "Cloud & Infrastructure"}
+            "event_driven": {"x": 11000, "y": 3500, "title": "Async Task Queues & Event Pipelines"},
+            "devops_cloud": {"x": 0, "y": 3500, "title": "Cloud & Infrastructure"}
         }
+
 
         persp_info = PERSPECTIVE_OFFSETS.get(perspective or "overview", {"x": 0, "y": 0, "title": "System Architecture"})
         
