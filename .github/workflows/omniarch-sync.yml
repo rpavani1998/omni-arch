@@ -3,8 +3,26 @@ name: OmniArch Architecture Sync
 on:
   push:
     branches: [ main, master ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'tests/**'
+      - 'frontend/public/**'
+      - '**.png'
+      - '**.svg'
+      - '**.ico'
+      - '.gitignore'
   pull_request:
     branches: [ main, master ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'tests/**'
+      - 'frontend/public/**'
+      - '**.png'
+      - '**.svg'
+      - '**.ico'
+      - '.gitignore'
   workflow_dispatch:
     inputs:
       perspective:
@@ -43,6 +61,8 @@ jobs:
     steps:
       - name: Checkout Codebase
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Run OmniArch Visual Architecture Sync
         uses: ./
@@ -56,3 +76,5 @@ jobs:
           ai-model-name: ${{ secrets.AI_MODEL_NAME || 'qwen/qwen-2.5-coder-32b-instruct' }}
           ai-api-key: ${{ secrets.AI_API_KEY || secrets.OPENROUTER_API_KEY || secrets.MODELSCOPE_API_KEY }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          only-on-drift: 'true'
+          skip-unchanged: 'true'

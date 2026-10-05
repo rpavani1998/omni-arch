@@ -2,13 +2,79 @@ import os
 import json
 import sys
 import re
+import subprocess
 import requests
+
+def check_architectural_changes_in_pr() -> bool:
+    """Returns True if files modified in the PR have potential architectural impact."""
+    try:
+        base_ref = os.getenv("GITHUB_BASE_REF") or "main"
+        # Fetch base branch diff if available
+        res = subprocess.run(
+            ["git", "diff", "--name-only", f"origin/{base_ref}...HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        changed_files = [f.strip() for f in res.stdout.splitlines() if f.strip()]
+        if not changed_files:
+            # Fallback to HEAD~1 diff
+            res = subprocess.run(
+                ["git", "diff", "--name-only", "HEAD~1...HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            changed_files = [f.strip() for f in res.stdout.splitlines() if f.strip()]
+        
+        if not changed_files:
+            return True  # If git history unavailable, proceed safely
+            
+        architectural_exts = {".py", ".ts", ".js", ".go", ".rs", ".java", ".prisma", ".sql", ".graphql"}
+        key_manifests = {
+            "package.json", "requirements.txt", "pyproject.toml", "go.mod", 
+            "Cargo.toml", "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
+            "openapi.yaml", "openapi.json"
+        }
+        
+        for f in changed_files:
+            fname = os.path.basename(f)
+            ext = os.path.splitext(f)[1].lower()
+            
+            # Explicitly ignore non-architectural documentation, test suites, and styling
+            if any(f.startswith(d) for d in ["docs/", "tests/", "frontend/public/", ".github/"]):
+                continue
+            if ext in [".md", ".txt", ".png", ".jpg", ".svg", ".css", ".ico", ".lock"]:
+                continue
+            if fname in key_manifests or ext in architectural_exts:
+                return True
+        return False
+    except Exception as e:
+        print(f"[Pre-Flight] Diff inspection warning: {e}. Proceeding with standard scan.")
+        return True
 
 def main():
     # Load OmniArch action modules from action checkout path
     action_root = os.getenv("ACTION_PATH") or os.getcwd()
     sys.path.insert(0, action_root)
     
+    skip_unchanged = os.getenv("INPUT_SKIP_UNCHANGED", "true").lower() in ("true", "1", "yes")
+    is_pr = bool(os.getenv("GITHUB_BASE_REF") or (os.getenv("GITHUB_REF", "").startswith("refs/pull/")))
+    
+    # 0. Pre-Flight Zero-Cost Early Exit
+    if skip_unchanged and is_pr:
+        if not check_architectural_changes_in_pr():
+            print("[Pre-Flight] No architectural file modifications detected in this PR. Skipping AI synthesis and Miro sync ($0 token cost).")
+            if "GITHUB_STEP_SUMMARY" in os.environ and os.environ["GITHUB_STEP_SUMMARY"]:
+                try:
+                    with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as sf:
+                        sf.write("### ⚡ OmniArch Pre-Flight Optimization\n")
+                        sf.write("- **Status:** Skipped (No structural architecture files modified in this PR).\n")
+                        sf.write("- **Token Cost:** $0.00 | **Latency:** < 1s\n")
+                except Exception:
+                    pass
+            return
+
     from backend.analyzer import analyze_codebase
     from backend.engine import ArchitectureEngine
     from backend.miro_client import MiroClient
@@ -61,7 +127,7 @@ def main():
         board_url = sync_result["board_url"]
         frame_id = sync_result["frame_id"]
 
-    print("[4/4] Checking Architectural Drift & Posting PR Review Comment...")
+    print("[4/4] Checking Architectural Drift & Review Reporting...")
     
     created = sync_result.get("created_nodes", 0)
     updated = sync_result.get("updated_nodes", 0)
@@ -174,8 +240,22 @@ def main():
     github_token = os.getenv("GITHUB_TOKEN")
     repo = os.getenv("GITHUB_REPOSITORY")
     ev_path = os.getenv("GITHUB_EVENT_PATH")
+    only_on_drift = os.getenv("INPUT_ONLY_ON_DRIFT", "true").lower() in ("true", "1", "yes")
+    has_drift = (created > 0 or updated > 0 or deleted > 0)
     
-    if github_token and repo:
+    # Conditional PR comment filtering
+    if only_on_drift and not has_drift:
+        print("[INFO] No architectural drift detected. Skipping PR comment posting to keep review clean.")
+        if "GITHUB_STEP_SUMMARY" in os.environ and os.environ["GITHUB_STEP_SUMMARY"]:
+            try:
+                with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as sf:
+                    sf.write("### OmniArch Architecture Verification\n")
+                    sf.write(f"- **Status:** No Topological Drift detected ({frame_title}).\n")
+                    sf.write("- **Miro Board:** Existing diagrams are up to date.\n")
+                    sf.write("- **PR Comment:** Skipped per `only-on-drift: true` setting.\n")
+            except Exception:
+                pass
+    elif github_token and repo:
         pr_number = None
         if ev_path and os.path.exists(ev_path):
             try:

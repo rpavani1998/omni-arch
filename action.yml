@@ -42,6 +42,14 @@ inputs:
     description: 'LLM Model Name (e.g. Qwen/Qwen3.8-27B, gpt-4o)'
     required: false
     default: 'Qwen/Qwen3.8-27B'
+  only-on-drift:
+    description: 'Only post or update PR comment if architectural changes or drift are detected (saves PR noise)'
+    required: false
+    default: 'true'
+  skip-unchanged:
+    description: 'Skip AI synthesis and Miro sync when PR changes have no architectural impact (zero token cost)'
+    required: false
+    default: 'true'
 
 outputs:
   board-url:
@@ -75,10 +83,14 @@ runs:
         INPUT_API_KEY: ${{ inputs.ai-api-key }}
         INPUT_BASE_URL: ${{ inputs.ai-base-url }}
         INPUT_MODEL_NAME: ${{ inputs.ai-model-name }}
+        INPUT_ONLY_ON_DRIFT: ${{ inputs.only-on-drift }}
+        INPUT_SKIP_UNCHANGED: ${{ inputs.skip-unchanged }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         GITHUB_REF: ${{ github.ref }}
+        GITHUB_BASE_REF: ${{ github.base_ref }}
         GITHUB_EVENT_PATH: ${{ github.event_path }}
         GITHUB_OUTPUT: ${{ github.output }}
+        GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
       run: |
         python ${{ github.action_path }}/backend/action_runner.py
