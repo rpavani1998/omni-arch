@@ -230,7 +230,7 @@ runs:
 - **Recommended Review Checklist:**
   • {recommendations}
 
-*Automated by [OmniArch](https://github.com/rpavani1998/qwen-arch-canvas) & Miro Living Architecture Engine.*
+*Automated by [OmniArch](https://github.com/rpavani1998/omniarch) & Miro Living Architecture Engine.*
 """
         github_token = os.getenv("GITHUB_TOKEN")
         repo = os.getenv("GITHUB_REPOSITORY")

@@ -51,5 +51,5 @@ Under GDPR and CCPA, you retain full rights to:
 ### 5. Contact & Support
 
 If you have questions, inquiries, or security audit requests, please contact:
-- **Repository:** [https://github.com/rpavani1998/qwen-arch-canvas](https://github.com/rpavani1998/qwen-arch-canvas)
+- **Repository:** [https://github.com/rpavani1998/omniarch](https://github.com/rpavani1998/omniarch)
 - **Email:** support@omniarch.dev

@@ -64,7 +64,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run OmniArch Visual Architecture Sync
-        uses: rpavani1998/qwen-arch-canvas@v1.0.0
+        uses: rpavani1998/omniarch@v1.0.0
         with:
           miro-access-token: ${{ secrets.MIRO_ACCESS_TOKEN }}
           miro-board-id: ${{ secrets.MIRO_BOARD_ID }}
@@ -111,8 +111,8 @@ OmniArch works with **any OpenAI-compatible API endpoint**. You only need to sup
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/rpavani1998/qwen-arch-canvas.git
-cd qwen-arch-canvas
+git clone https://github.com/rpavani1998/omniarch.git
+cd omniarch
 
 # 2. Start FastAPI Backend
 cd backend
