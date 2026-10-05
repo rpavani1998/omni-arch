@@ -310,19 +310,27 @@ from fastapi.responses import RedirectResponse
 from fastapi import Request
 
 @router.get("/oauth/authorize")
-def oauth_authorize(team_id: Optional[str] = None, redirect: bool = False):
-    auth_data = oauth_manager.generate_authorization_url(team_id=team_id)
+def oauth_authorize(request: Request, team_id: Optional[str] = None, redirect: bool = False, redirect_uri: Optional[str] = None):
+    effective_redirect_uri = redirect_uri or os.getenv("MIRO_REDIRECT_URI")
+    if not effective_redirect_uri:
+        base = str(request.base_url).rstrip('/')
+        effective_redirect_uri = f"{base}/api/oauth/callback"
+    auth_data = oauth_manager.generate_authorization_url(team_id=team_id, redirect_uri=effective_redirect_uri)
     if redirect:
         return RedirectResponse(url=auth_data["url"])
     return auth_data
 
 @router.get("/oauth/callback")
 @limiter.limit("10/minute")
-def oauth_callback(request: Request, code: str, state: str):
+def oauth_callback(request: Request, code: str, state: str, redirect_uri: Optional[str] = None):
     if not oauth_manager.validate_state(state):
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth CSRF state parameter.")
     try:
-        token_info = oauth_manager.exchange_code_for_token(code)
+        effective_redirect_uri = redirect_uri or os.getenv("MIRO_REDIRECT_URI")
+        if not effective_redirect_uri:
+            base = str(request.base_url).rstrip('/')
+            effective_redirect_uri = f"{base}/api/oauth/callback"
+        token_info = oauth_manager.exchange_code_for_token(code, redirect_uri=effective_redirect_uri)
         team_id = token_info.get("team_id")
         return RedirectResponse(url=f"/?oauth=success&team_id={team_id}")
     except Exception as e:

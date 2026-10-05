@@ -152,24 +152,26 @@ class MiroOAuthManager:
         self.token_url = "https://api.miro.com/v1/oauth/token"
         self._pending_states: Dict[str, float] = {}
 
-    def generate_authorization_url(self, team_id: Optional[str] = None) -> Dict[str, str]:
+    def generate_authorization_url(self, team_id: Optional[str] = None, redirect_uri: Optional[str] = None) -> Dict[str, str]:
         """Generates a secure OAuth2 authorization URL with CSRF state token."""
         state = secrets.token_urlsafe(32)
         expiry_ts = time.time() + 900  # 15 minutes TTL
+        effective_redirect_uri = redirect_uri or self.redirect_uri
         
-        # Store state in KV if enabled, otherwise fallback to in-memory dictionary
+        # Store state in KV if enabled, along with redirect_uri
+        state_record = json.dumps({"created_at": time.time(), "redirect_uri": effective_redirect_uri})
         if installation_store.is_kv_enabled():
-            installation_store._kv_request(["SET", f"omniarch:oauth_state:{state}", "1", "EX", "900"])
+            installation_store._kv_request(["SET", f"omniarch:oauth_state:{state}", state_record, "EX", "900"])
         
         # Always record locally as fallback/cache (and prune expired states)
         now = time.time()
-        self._pending_states = {s: exp for s, exp in self._pending_states.items() if exp > now}
-        self._pending_states[state] = expiry_ts
+        self._pending_states = {s: exp for s, exp in self._pending_states.items() if (exp if isinstance(exp, (int, float)) else exp.get("exp", 0)) > now}
+        self._pending_states[state] = {"exp": expiry_ts, "redirect_uri": effective_redirect_uri}
         
         params = {
             "response_type": "code",
             "client_id": self.client_id,
-            "redirect_uri": self.redirect_uri,
+            "redirect_uri": effective_redirect_uri,
             "state": state
         }
         if team_id:
@@ -180,7 +182,8 @@ class MiroOAuthManager:
         
         return {
             "url": full_auth_url,
-            "state": state
+            "state": state,
+            "redirect_uri": effective_redirect_uri
         }
 
     def validate_state(self, state: str) -> bool:
@@ -195,22 +198,25 @@ class MiroOAuthManager:
                 self._pending_states.pop(state, None)
                 return True
                 
-        expiry = self._pending_states.pop(state, None)
-        if expiry and expiry > time.time():
-            return True
+        stored = self._pending_states.pop(state, None)
+        if stored:
+            exp = stored if isinstance(stored, (int, float)) else stored.get("exp", 0)
+            if exp > time.time():
+                return True
         return False
 
-    def exchange_code_for_token(self, code: str) -> Dict[str, Any]:
+    def exchange_code_for_token(self, code: str, redirect_uri: Optional[str] = None) -> Dict[str, Any]:
         """Exchanges authorization code for access and refresh tokens with Miro."""
         if not self.client_id or not self.client_secret:
             raise ValueError("MIRO_CLIENT_ID and MIRO_CLIENT_SECRET must be configured in environment.")
 
+        effective_redirect_uri = redirect_uri or self.redirect_uri
         payload = {
             "grant_type": "authorization_code",
             "client_id": self.client_id,
             "client_secret": self.client_secret,
             "code": code,
-            "redirect_uri": self.redirect_uri
+            "redirect_uri": effective_redirect_uri
         }
 
         resp = requests.post(self.token_url, json=payload)
