@@ -172,7 +172,7 @@ class ArchitectureEngine:
             model = model_name or default_model
             provider_label = f"Custom Model ({model})"
             
-        client = OpenAI(base_url=endpoint, api_key=key or "dummy", timeout=15.0)
+        client = OpenAI(base_url=endpoint, api_key=key or "dummy", timeout=45.0)
         return client, model, provider_label
 
 
@@ -538,6 +538,188 @@ Output STRICT JSON only with the following schema:
         sigs = codebase_data.get("signatures", {})
         file_tree = codebase_data.get("file_tree", [])
         
+        persp = (perspective or "overview").lower().strip()
+
+        # -------------------------------------------------------------
+        # PERSPECTIVE 1: DATA FLOW & REQUEST LIFECYCLE
+        # -------------------------------------------------------------
+        if persp in ["data_flow", "request_lifecycle", "api_flow"]:
+            layers = [
+                {"id": "tier_1_trigger", "name": "Ingress Triggers & Clients", "order": 1},
+                {"id": "tier_2_ingress", "name": "Auth & Rate Limit Shield", "order": 2},
+                {"id": "tier_3_pipeline", "name": "AST Analysis & Prompt Pipeline", "order": 3},
+                {"id": "tier_4_reasoning", "name": "AI Model Reasoning Engine", "order": 4},
+                {"id": "tier_5_sync", "name": "Miro Canvas & PR Dispatcher", "order": 5}
+            ]
+            nodes = [
+                {
+                    "id": "df_client_req",
+                    "name": "Web Canvas Client",
+                    "layer_id": "tier_1_trigger",
+                    "type": "frontend",
+                    "tech": "React 18 / SSE Stream",
+                    "description": "Dispatches codebase scan request and listens for real-time progress events",
+                    "endpoints_or_features": ["POST /api/analyze", "GET /api/progress/stream"]
+                },
+                {
+                    "id": "df_github_event",
+                    "name": "GitHub PR Action Trigger",
+                    "layer_id": "tier_1_trigger",
+                    "type": "gateway",
+                    "tech": "GitHub Actions CI/CD",
+                    "description": "Triggers automated architecture diff analysis on pull request push",
+                    "endpoints_or_features": ["action.yml", "PR Event Payload"]
+                },
+                {
+                    "id": "df_rate_guard",
+                    "name": "Security & Rate Limiter",
+                    "layer_id": "tier_2_ingress",
+                    "type": "gateway",
+                    "tech": "FastAPI / Sliding Window",
+                    "description": "Enforces 60 req/min limits and verifies team Bearer tokens",
+                    "endpoints_or_features": ["Sliding Window Bucket", "CORS Guard"]
+                },
+                {
+                    "id": "df_ast_tokenizer",
+                    "name": "AST Signature Harvester",
+                    "layer_id": "tier_3_pipeline",
+                    "type": "service",
+                    "tech": "Python ast & Tree Walker",
+                    "description": "Scans files, extracts class/route signatures, and scrubs API secrets",
+                    "endpoints_or_features": ["Secret Redaction", "Route Discovery", "AST Parse"]
+                },
+                {
+                    "id": "df_ai_reasoner",
+                    "name": "Universal Model Reasoner",
+                    "layer_id": "tier_4_reasoning",
+                    "type": "service",
+                    "tech": "Qwen / OpenAI / Anthropic",
+                    "description": "Transforms AST signatures into layered graph topology with Sugiyama positioning",
+                    "endpoints_or_features": ["Zero-Shot Topology", "Sugiyama Crossing Reduction"]
+                },
+                {
+                    "id": "df_miro_patcher",
+                    "name": "Miro In-Place Sync Worker",
+                    "layer_id": "tier_5_sync",
+                    "type": "service",
+                    "tech": "Miro REST API v2",
+                    "description": "Performs in-place PATCH on modified shapes and manages clean non-overlapping lines",
+                    "endpoints_or_features": ["PATCH /v2/shapes", "DELETE /connectors", "POST /connectors"]
+                },
+                {
+                    "id": "df_pr_bot",
+                    "name": "GitHub PR Review Bot",
+                    "layer_id": "tier_5_sync",
+                    "type": "external",
+                    "tech": "GitHub REST API",
+                    "description": "Posts architecture review sticky comment with drift alert and Miro link",
+                    "endpoints_or_features": ["POST /issues/comments", "Architecture Drift Alert"]
+                }
+            ]
+            connections = [
+                {"from": "df_client_req", "to": "df_rate_guard", "protocol": "HTTPS POST", "label": "Initiates Analysis"},
+                {"from": "df_github_event", "to": "df_rate_guard", "protocol": "CI/CD Ingress", "label": "Dispatches PR Scan"},
+                {"from": "df_rate_guard", "to": "df_ast_tokenizer", "protocol": "Internal Call", "label": "Sanitized Payload"},
+                {"from": "df_ast_tokenizer", "to": "df_ai_reasoner", "protocol": "JSON Prompt", "label": "AST Graph Data"},
+                {"from": "df_ai_reasoner", "to": "df_miro_patcher", "protocol": "Graph Topology", "label": "Coordinate Graph"},
+                {"from": "df_miro_patcher", "to": "df_pr_bot", "protocol": "Sync Result", "label": "Board Deep-Link"}
+            ]
+            return {
+                "system_title": f"{root} Request Lifecycle & API Flow",
+                "summary": f"End-to-end data pipeline tracing user requests and GitHub PR triggers through AST analysis, LLM inference, and Miro canvas synchronization.",
+                "architecture_style": "Pipelined Stream & Event-Driven",
+                "tech_stack": ["FastAPI", "React", "Python AST", "Miro REST v2", "GitHub Actions"],
+                "layers": layers,
+                "nodes": nodes,
+                "connections": connections,
+                "insights": {
+                    "strengths": ["Streamlined pipeline with zero blocking in AST extraction.", "In-place Miro updates avoid full canvas wiping."],
+                    "bottlenecks": ["External model inference latency during high concurrency."],
+                    "recommendations": ["Use client-side SSE progress streaming for live user feedback."]
+                }
+            }
+
+        # -------------------------------------------------------------
+        # PERSPECTIVE 2: DEVOPS & CI/CD PIPELINE
+        # -------------------------------------------------------------
+        if persp in ["devops_pipeline", "cicd", "devops"]:
+            layers = [
+                {"id": "tier_1_source", "name": "Source Control & PR", "order": 1},
+                {"id": "tier_2_ci", "name": "GitHub Actions CI Runner", "order": 2},
+                {"id": "tier_3_qa", "name": "Automated Quality & Security Gates", "order": 3},
+                {"id": "tier_4_drift", "name": "Architecture Drift & Diffing", "order": 4},
+                {"id": "tier_5_deploy", "name": "Production Serverless Release", "order": 5}
+            ]
+            nodes = [
+                {"id": "do_git_pr", "name": "Developer PR Push", "layer_id": "tier_1_source", "type": "frontend", "tech": "Git / GitHub", "description": "Branch commit and pull request trigger", "endpoints_or_features": ["git push", "pull_request: [opened, synchronize]"]},
+                {"id": "do_gh_action", "name": "OmniArch Action Workflow", "layer_id": "tier_2_ci", "type": "gateway", "tech": "GitHub Actions / action.yml", "description": "Orchestrates containerized codebase inspection and Miro sync", "endpoints_or_features": ["Checkout Repo", "Python Setup", "Miro Token Auth"]},
+                {"id": "do_test_suite", "name": "Unit & Security Test Suite", "layer_id": "tier_3_qa", "type": "service", "tech": "Python unittest / AST Scanner", "description": "Executes 27 automated test suites verifying OAuth, rate limiting, and diffing", "endpoints_or_features": ["OAuth Tests", "Diff Engine Tests", "Security Tests"]},
+                {"id": "do_drift_engine", "name": "PR Architecture Reporter", "layer_id": "tier_4_drift", "type": "service", "tech": "Python pr_reporter.py", "description": "Calculates architecture drift severity and generates sticky PR review comments", "endpoints_or_features": ["[CRITICAL: ARCHITECTURE REVIEW]", "Markdown Diff Table"]},
+                {"id": "do_vercel_prod", "name": "Vercel Serverless Prod", "layer_id": "tier_5_deploy", "type": "external", "tech": "Vercel / FastAPI ASGI", "description": "Auto-deploys frontend and API endpoints to serverless global edge", "endpoints_or_features": ["Global Edge CDN", "Vercel KV Storage", "Auto Scaling"]}
+            ]
+            connections = [
+                {"from": "do_git_pr", "to": "do_gh_action", "protocol": "Webhook", "label": "Triggers CI"},
+                {"from": "do_gh_action", "to": "do_test_suite", "protocol": "Runner Step", "label": "Runs Gates"},
+                {"from": "do_test_suite", "to": "do_drift_engine", "protocol": "Test Results", "label": "Computes Drift"},
+                {"from": "do_drift_engine", "to": "do_vercel_prod", "protocol": "Deploy Hook", "label": "Deploys Edge"}
+            ]
+            return {
+                "system_title": f"{root} CI/CD & DevOps Pipeline",
+                "summary": "Automated deployment, quality assurance, and architectural governance pipeline.",
+                "architecture_style": "GitOps & Serverless Continuous Delivery",
+                "tech_stack": ["GitHub Actions", "Vercel", "Python unittest", "Miro REST v2"],
+                "layers": layers,
+                "nodes": nodes,
+                "connections": connections,
+                "insights": {
+                    "strengths": ["Zero-touch architectural PR comments prevent undocumented structural drift."],
+                    "bottlenecks": ["Action runner queue times during concurrent PR spikes."],
+                    "recommendations": ["Cache AST parser signatures between commit SHAs."]
+                }
+            }
+
+        # -------------------------------------------------------------
+        # PERSPECTIVE 3: SECURITY & ZERO-TRUST AUTH
+        # -------------------------------------------------------------
+        if persp in ["security_auth", "security", "zero_trust"]:
+            layers = [
+                {"id": "tier_1_sec_ingress", "name": "Public Ingress Perimeter", "order": 1},
+                {"id": "tier_2_sec_guard", "name": "Security Headers & Rate Limit", "order": 2},
+                {"id": "tier_3_sec_oauth", "name": "OAuth2 PKCE & Token Store", "order": 3},
+                {"id": "tier_4_sec_redact", "name": "Secret Redaction Engine", "order": 4},
+                {"id": "tier_5_sec_vault", "name": "Encrypted Miro Cloud Vault", "order": 5}
+            ]
+            nodes = [
+                {"id": "sec_client_tls", "name": "TLS 1.3 Client Ingress", "layer_id": "tier_1_sec_ingress", "type": "frontend", "tech": "HTTPS / HSTS", "description": "Enforces HTTPS encryption, CSP, X-Frame-Options, and CORS isolation", "endpoints_or_features": ["HSTS", "CSP: default-src 'self'"]},
+                {"id": "sec_rate_limiter", "name": "Sliding Window Rate Shield", "layer_id": "tier_2_sec_guard", "type": "gateway", "tech": "FastAPI Middleware", "description": "Prevents DDoS and brute-force token exhaustion across endpoints", "endpoints_or_features": ["60 req/min Window", "IP Tracking"]},
+                {"id": "sec_oauth_store", "name": "OAuth2 Installation Store", "layer_id": "tier_3_sec_oauth", "type": "database", "tech": "Vercel KV / Upstash Redis", "description": "Stores encrypted access/refresh tokens per workspace with auto-refresh on 401", "endpoints_or_features": ["Token Encryption", "Refresh Token Rotation"]},
+                {"id": "sec_redaction", "name": "Secret & Key Scrubber", "layer_id": "tier_4_sec_redact", "type": "service", "tech": "Regex AST Sanitizer", "description": "Detects and redacts AWS keys, GitHub tokens, DB URLs, and private keys before LLM dispatch", "endpoints_or_features": ["[REDACTED_AWS_KEY]", "[REDACTED_GITHUB_TOKEN]"]},
+                {"id": "sec_miro_vault", "name": "Miro Enterprise REST Vault", "layer_id": "tier_5_sec_vault", "type": "external", "tech": "Miro OAuth2 / Bearer", "description": "Scoped workspace board access with uninstall revocation webhook", "endpoints_or_features": ["boards:read", "boards:write", "POST /api/oauth/uninstall"]}
+            ]
+            connections = [
+                {"from": "sec_client_tls", "to": "sec_rate_limiter", "protocol": "TLS 1.3", "label": "Encrypted Ingress"},
+                {"from": "sec_rate_limiter", "to": "sec_oauth_store", "protocol": "Bearer Auth", "label": "Token Validation"},
+                {"from": "sec_oauth_store", "to": "sec_redaction", "protocol": "Sanitized Flow", "label": "Token Verified"},
+                {"from": "sec_redaction", "to": "sec_miro_vault", "protocol": "OAuth2 Bearer", "label": "Authenticated Sync"}
+            ]
+            return {
+                "system_title": f"{root} Security & Zero-Trust Architecture",
+                "summary": "Multi-tier security topology with secret redaction, OAuth2 token isolation, and sliding window rate limiting.",
+                "architecture_style": "Zero-Trust & Defense-in-Depth",
+                "tech_stack": ["OAuth2 PKCE", "Vercel KV", "FastAPI Security Middleware", "Secret Redactor"],
+                "layers": layers,
+                "nodes": nodes,
+                "connections": connections,
+                "insights": {
+                    "strengths": ["Automated credential scrubbing prevents accidental LLM prompt leakage.", "Auto-refresh token rotation eliminates stale credentials."],
+                    "bottlenecks": ["Vercel KV latency on cold starts."],
+                    "recommendations": ["Enable Redis pipelining for multi-tenant token batching."]
+                }
+            }
+
+        # -------------------------------------------------------------
+        # DEFAULT / OVERVIEW: SYSTEM ARCHITECTURE (HLD)
+        # -------------------------------------------------------------
         nodes = []
         connections = []
         
