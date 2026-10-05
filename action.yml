@@ -86,11 +86,12 @@ runs:
         from backend.analyzer import analyze_codebase
         from backend.engine import ArchitectureEngine
         from backend.miro_client import MiroClient
+        from backend.pr_reporter import PRArchitectureReporter
         
-        print("[1/3] Ingesting codebase directory...")
+        print("[1/4] Ingesting codebase directory...")
         codebase_data = analyze_codebase(source_type="local", source_value=os.getcwd())
         
-        print("[2/3] Running AI architectural synthesis...")
+        print("[2/4] Running AI architectural synthesis...")
         engine = ArchitectureEngine()
         arch_data = engine.generate_architecture(
             codebase_data=codebase_data,
@@ -102,7 +103,7 @@ runs:
             custom_instructions=os.getenv("INPUT_CUSTOM_INSTRUCTIONS", "")
         )
         
-        print(f"[3/3] Synchronizing to Miro Board: {os.getenv('MIRO_BOARD_ID')}...")
+        print(f"[3/4] Synchronizing to Miro Board: {os.getenv('MIRO_BOARD_ID')}...")
         client = MiroClient(
             access_token=os.getenv("MIRO_ACCESS_TOKEN"),
             board_id=os.getenv("MIRO_BOARD_ID")
@@ -115,6 +116,17 @@ runs:
         board_url = sync_result.get("board_url", "")
         frame_id = sync_result.get("frame_id", "")
         print(f"[SUCCESS] Miro Frame Sync Complete! Deep Link: {board_url}")
+
+        print("[4/4] Checking Architectural Drift & Posting PR Review Comment...")
+        commented = PRArchitectureReporter.post_or_update_pr_comment(
+            sync_result=sync_result,
+            arch_data=arch_data,
+            perspective=os.getenv("INPUT_PERSPECTIVE", "overview"),
+            github_token=os.getenv("GITHUB_TOKEN"),
+            github_repository=os.getenv("GITHUB_REPOSITORY")
+        )
+        if commented:
+            print("[SUCCESS] Automated PR review comment updated with Miro deep-link!")
         
         # Write outputs to GitHub Action environment
         if "GITHUB_OUTPUT" in os.environ:
@@ -122,3 +134,4 @@ runs:
                 f.write(f"board-url={board_url}\n")
                 f.write(f"frame-id={frame_id}\n")
         EOF
+
