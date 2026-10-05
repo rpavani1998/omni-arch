@@ -17,12 +17,13 @@ OmniArch bridges software codebases and visual system design. It extracts AST si
 
 ## Key Features
 
-- **🏆 Proven Hackathon-Winning Engine:** Engineered from the ground up for high-signal AST extraction and living architectural documentation.
-- **🔌 Universal Multi-Model & BYOK:** Zero vendor lock-in. Bring your own API keys for ModelScope (Qwen), OpenAI (GPT-4o), DeepSeek (V3/R1), OpenRouter (Claude), Groq, or local Ollama.
+- **Proven Hackathon-Winning Engine:** Engineered from the ground up for high-signal AST extraction and living architectural documentation.
+- **Universal Multi-Model & BYOK:** Zero vendor lock-in. Bring your own API keys for ModelScope (Qwen), OpenAI (GPT-4o), DeepSeek (V3/R1), OpenRouter (Claude), Groq, or local Ollama.
 - **8 SDLC Architectural Perspectives:** Purpose-built diagrams for HLD, Request Lifecycle, Data Model/ERD, CI/CD Pipelines, Security/Zero-Trust Auth, Async Workers, Observability/SRE, and AI/RAG Pipelines.
 - **Native Miro Vector Shapes:** Creates real editable cards, shape tiers, and orthogonal connectors in Miro rather than flat static image exports.
 - **Automated GitHub Action Integration:** Run on every pull request to synchronize versioned architecture frames to Miro and post live Mermaid diagram reviews on PRs.
 - **Miro Web SDK v2 In-Board Panel:** Open OmniArch directly within Miro canvas sidebar panels to inspect and generate diagrams on the fly.
+- **Detailed Technical Architecture:** For full data pipeline, AST extraction, and productionization details, read [ARCHITECTURE.md](file:///Users/pavanirajula/Files/MiroxQwenMeetUp/ARCHITECTURE.md).
 
 ---
 
