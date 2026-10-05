@@ -64,7 +64,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run OmniArch Visual Architecture Sync
-        uses: rpavani1998/omniarch@v1.0.0
+        uses: rpavani1998/omni-arch@v1.0.0
         with:
           miro-access-token: ${{ secrets.MIRO_ACCESS_TOKEN }}
           miro-board-id: ${{ secrets.MIRO_BOARD_ID }}
