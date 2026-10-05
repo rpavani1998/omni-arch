@@ -117,16 +117,105 @@ Visit `http://localhost:3000` to open the application.
 
 ---
 
-## One-Click Vercel Deployment
+## Deployment & Hosting Guide
 
-1. Connect your repository to Vercel or deploy using the Vercel CLI.
-2. Under **Project Settings > Environment Variables**, configure:
-   - `MIRO_ACCESS_TOKEN` : Your Miro OAuth token (`eyJ...`)
-   - `MIRO_BOARD_ID` : Your target Miro Board ID (e.g. `uXjVEekRCSA=`)
-   - `AI_API_KEY` : Your model provider API key
-   - `AI_BASE_URL` : Provider base URL (e.g. `https://api.openai.com/v1` or `https://api.deepseek.com/v1`)
-   - `AI_MODEL_NAME` : Model name (e.g. `gpt-4o` or `deepseek-chat`)
-3. Click **Deploy**.
+### Deploying to Vercel (Serverless Marketplace Backend)
+
+OmniArch is pre-configured for zero-maintenance Vercel serverless deployment:
+
+1. **Push your repository to GitHub** (on main or your release branch).
+2. **Import project into [Vercel](https://vercel.com)**:
+   - Root Directory: `./`
+   - Framework Preset: **Vite**
+   - Build Command: `npm run build --prefix frontend && cp -r frontend/dist api/dist`
+   - Output Directory: `frontend/dist`
+3. **Configure Environment Variables in Vercel Dashboard** (`Settings > Environment Variables`):
+   ```env
+   # Miro Marketplace OAuth Credentials
+   MIRO_CLIENT_ID=your_miro_client_id
+   MIRO_CLIENT_SECRET=your_miro_client_secret
+   MIRO_REDIRECT_URI=https://your-domain.vercel.app/api/oauth/callback
+
+   # Multi-Tenant Installation Storage (Vercel KV or Upstash Redis)
+   KV_REST_API_URL=https://your-kv-instance.upstash.io
+   KV_REST_API_TOKEN=your_kv_token
+
+   # Default AI Inference Provider (For users without custom BYOK keys)
+   AI_PROVIDER=custom
+   AI_BASE_URL=https://api.openai.com/v1
+   AI_MODEL_NAME=gpt-4o
+   AI_API_KEY=sk-...
+   ```
+4. **Click Deploy**. Vercel will host your static frontend at `/` and route all API calls through serverless Python functions in `/api`.
+
+---
+
+## Miro Developer Portal Setup (Creating the Marketplace App)
+
+To publish OmniArch or use it in your Miro workspace:
+
+1. Go to **[Miro Developer Portal](https://developers.miro.com/)** and click **Create new app**.
+2. **App Details:**
+   - **App Name:** OmniArch — Living Codebase Architecture Engine
+   - **Description:** AI-powered visual architecture diagrams from any GitHub repository directly into Miro.
+3. **App URL & Embedding:**
+   - **App URL:** `https://your-domain.vercel.app`
+   - Under **App Capabilities**, enable **Web SDK** and check **Open in board sidebar**.
+4. **OAuth2 Redirect URI:**
+   - Add: `https://your-domain.vercel.app/api/oauth/callback`
+5. **Permissions & Scopes:**
+   - `boards:read` (Read board metadata and inspect existing shapes for in-place diffing)
+   - `boards:write` (Create and update shape cards, frames, and connector lines)
+6. **App Webhooks (Uninstall / Token Revocation):**
+   - Webhook URL: `https://your-domain.vercel.app/api/oauth/uninstall`
+   - Event subscription: `app.uninstalled`
+
+---
+
+## End-User Guide (How People Use OmniArch on Miro)
+
+### Step 1: Install the App
+Users visit the Miro Marketplace (or click your OAuth install URL `https://your-domain.vercel.app/api/oauth/authorize`), choose their Miro team workspace, and grant permission with 1 click.
+
+### Step 2: Open OmniArch in Any Miro Board
+1. Open any Miro board in your workspace.
+2. In the left or bottom board toolbar, click the **OmniArch** icon.
+3. The interactive sidebar panel opens directly on the canvas.
+
+### Step 3: Provide Your Codebase Source
+Choose from 3 input modes:
+- **Public GitHub Repository:** Paste any repo URL (e.g. `https://github.com/fastapi/fastapi` or `username/repo`).
+- **Local Directory / Monorepo:** Point to any local project path for AST extraction.
+- **Custom Architecture Specification:** Paste a text prompt or microservices list.
+
+### Step 4: Choose Architectural Perspective
+Select from 8 purpose-built SDLC perspectives:
+- `System Architecture (HLD)`
+- `Request Lifecycle & API Flow`
+- `Data Model & Schema Topology`
+- `CI/CD & DevOps Pipeline`
+- `Security & Zero-Trust Auth`
+- `Async Task Queues & Workers`
+- `Observability & SRE Health`
+- `AI & RAG Pipeline Flow`
+
+### Step 5: (Optional) Bring Your Own Model (BYOK)
+In the Model Settings drawer, users can choose their preferred LLM (OpenAI, DeepSeek, Qwen/ModelScope, Anthropic Claude, or local Ollama) and supply their own API key. If omitted, the app uses the server default.
+
+### Step 6: Sync to Miro Canvas
+Click **Generate & Sync to Miro**.
+- OmniArch analyzes the AST signatures and extracts services, databases, and gateways.
+- A dedicated **non-overlapping Frame** is created on the Miro board containing color-coded cards, Sugiyama layered tiers, and orthogonal connector lines.
+- Multiple perspectives sit side-by-side on the same board with generous 5500px spacing corridors.
+
+### Step 7: Automatic In-Place PR Updates
+When code is modified or a new PR is merged:
+- Re-running the sync inspects existing cards on the board and performs **in-place `PATCH` updates**.
+- Existing shape IDs, comments, and sticky notes are preserved without clearing or duplicating the canvas.
+- Newly added microservices are added incrementally; deleted components are pruned.
+
+### Step 8: Code Scaffolding
+Click **Scaffold Code** on any shape card on the canvas or sidebar to generate runnable boilerplate implementations (FastAPI, Go, Next.js, Dockerfiles) for that component.
 
 ---
 
@@ -141,5 +230,7 @@ python3 -m unittest discover -s tests -v
 ## License & Compliance
 
 - **License:** MIT License
-- **Privacy Policy:** [privacy.html](https://qwenarch-canvas.vercel.app/privacy.html) (Zero codebase storage, 100% BYOK)
-- **Terms of Service:** [terms.html](https://qwenarch-canvas.vercel.app/terms.html)
+- **Privacy Policy:** [PRIVACY.md](PRIVACY.md) / [privacy.html](https://qwenarch-canvas.vercel.app/privacy.html) (Zero codebase storage, 100% ephemeral processing)
+- **Terms of Service:** [TERMS.md](TERMS.md) / [terms.html](https://qwenarch-canvas.vercel.app/terms.html)
+- **Marketplace Submission Manifest:** [MARKETPLACE_SUBMISSION.md](MARKETPLACE_SUBMISSION.md)
+
