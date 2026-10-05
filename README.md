@@ -1,15 +1,27 @@
 # OmniArch — Universal Codebase to Miro Architecture Engine
 
-OmniArch analyzes software repositories with **multi-model code reasoning LLMs (Qwen, DeepSeek, OpenAI, Claude, Local Ollama)** and automatically maps live, editable system architecture diagrams into **Miro's infinite whiteboard canvas**.
+> 🏆 **Born & Won 1st Place at the Miro x Qwen AI Hackathon / Meetup**  
+> Originally created as **QwenArch** (`qwen-arch-canvas`) to connect Alibaba Qwen with Miro's infinite canvas, OmniArch has evolved into a **Universal Living Architecture Engine & Plugin** supporting any model (Qwen, OpenAI, DeepSeek, Claude, Groq, Local Ollama) with zero lock-in and complete **BYOK (Bring Your Own Keys)** flexibility.
+
+OmniArch bridges software codebases and visual system design. It extracts AST signatures (REST routes, models, message brokers, dependencies) with zero code retention, feeds them into your chosen reasoning LLM, and renders editable, presentation-grade C4 architecture diagrams directly on Miro boards.
+
+---
+
+## 🌟 The Origin & Evolution
+
+1. **Phase 1 (The Hackathon Winner):** Built during the **Miro x Qwen Meetup & Hackathon**, *QwenArch* proved that Alibaba Qwen 2.5 Coder & Qwen 3.8 could analyze whole codebases in seconds and translate them into native Miro vector shapes, sticky notes, and orthogonal connectors.
+2. **Phase 2 (Universal Multi-Model Plugin):** Extended the core architecture into **OmniArch** — an open, universal plugin architecture. Developers can now plug in **any LLM provider** (ModelScope, OpenAI, DeepSeek, Anthropic Claude via OpenRouter, Groq, or private local Ollama) using standard OpenAI-compatible endpoints.
+3. **Phase 3 (Enterprise BYOK & CI/CD Bot):** Added a true **BYOK (Bring Your Own Key)** model. Plug in your own Miro workspace access tokens and LLM API keys. Run via interactive in-canvas Miro Web SDK v2 or headless via our **GitHub Action** on every pull request.
 
 ---
 
 ## Key Features
 
-- **8 SDLC Architectural Perspectives:** Generates purpose-built diagrams for HLD, Request Lifecycle, Data Model/ERD, CI/CD Pipelines, Security/Zero-Trust Auth, Async Workers, Observability/SRE, and AI/RAG Pipelines.
+- **🏆 Proven Hackathon-Winning Engine:** Engineered from the ground up for high-signal AST extraction and living architectural documentation.
+- **🔌 Universal Multi-Model & BYOK:** Zero vendor lock-in. Bring your own API keys for ModelScope (Qwen), OpenAI (GPT-4o), DeepSeek (V3/R1), OpenRouter (Claude), Groq, or local Ollama.
+- **8 SDLC Architectural Perspectives:** Purpose-built diagrams for HLD, Request Lifecycle, Data Model/ERD, CI/CD Pipelines, Security/Zero-Trust Auth, Async Workers, Observability/SRE, and AI/RAG Pipelines.
 - **Native Miro Vector Shapes:** Creates real editable cards, shape tiers, and orthogonal connectors in Miro rather than flat static image exports.
-- **Multi-Model & BYOK (Bring Your Own Key):** Zero server lock-in. Connect ModelScope (Qwen), OpenAI, Anthropic, DeepSeek, or local Ollama instances.
-- **Automated GitHub Action Integration:** Run on every pull request or release tag to synchronize versioned architecture frames directly to your team's Miro board.
+- **Automated GitHub Action Integration:** Run on every pull request to synchronize versioned architecture frames to Miro and post live Mermaid diagram reviews on PRs.
 - **Miro Web SDK v2 In-Board Panel:** Open OmniArch directly within Miro canvas sidebar panels to inspect and generate diagrams on the fly.
 
 ---
