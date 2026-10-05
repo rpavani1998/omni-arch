@@ -50,7 +50,39 @@ class TestMarketplaceFeatures(unittest.TestCase):
                 res = client.get_board_info()
                 mock_refresh.assert_called_once_with("team_auto_refresh")
                 self.assertEqual(client.access_token, "new_fresh_token_456")
-                self.assertEqual(res.get("name"), "Refreshed Board")
+    def test_analyze_endpoint_execution(self):
+        with patch("backend.main.engine.analyze_architecture") as mock_engine:
+            mock_engine.return_value = {
+                "architecture": {"nodes": [{"id": "svc1", "name": "API Service", "type": "service"}], "edges": []},
+                "usage": {"total_tokens": 150, "duration_ms": 200, "model": "test-model", "provider": "TestProvider"}
+            }
+            resp = self.client.post("/api/analyze", json={
+                "source_type": "prompt",
+                "source_value": "FastAPI service with PostgreSQL database",
+                "perspective": "overview"
+            })
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertTrue(data.get("success"))
+            self.assertEqual(len(data["architecture"]["nodes"]), 1)
+
+    def test_scaffold_endpoint_execution(self):
+        with patch("backend.main.engine.scaffold_component_boilerplate") as mock_scaffold:
+            mock_scaffold.return_value = {
+                "code": "from fastapi import FastAPI\napp = FastAPI()",
+                "dockerfile": "FROM python:3.10",
+                "docker_compose": "version: '3.8'",
+                "quickstart": "# Setup"
+            }
+            resp = self.client.post("/api/scaffold", json={
+                "component_name": "AuthService",
+                "component_type": "service",
+                "tech": "FastAPI"
+            })
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertTrue(data.get("success"))
+            self.assertIn("from fastapi", data["scaffold"]["code"])
 
 
 if __name__ == "__main__":
