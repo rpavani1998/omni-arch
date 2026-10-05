@@ -27,10 +27,19 @@ on:
         default: 'Highlight core services, API routes, and database entities'
         type: string
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   sync-architecture:
     name: Generate Architecture to Miro Canvas
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
     steps:
       - name: Checkout Codebase
         uses: actions/checkout@v4
