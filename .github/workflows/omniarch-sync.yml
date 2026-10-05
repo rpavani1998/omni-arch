@@ -11,12 +11,13 @@ jobs:
   sync-architecture:
     name: Generate Architecture to Miro Canvas
     runs-on: ubuntu-latest
+    if: ${{ secrets.MIRO_ACCESS_TOKEN != '' || github.event_name == 'workflow_dispatch' }}
     steps:
       - name: Checkout Codebase
         uses: actions/checkout@v4
 
       - name: Run OmniArch Visual Architecture Sync
-        uses: rpavani1998/qwen-arch-canvas@v1.0.0
+        uses: ./
         with:
           miro-access-token: ${{ secrets.MIRO_ACCESS_TOKEN }}
           miro-board-id: ${{ secrets.MIRO_BOARD_ID }}
