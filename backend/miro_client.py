@@ -98,27 +98,72 @@ class MiroClient:
         resp.raise_for_status()
         return resp.json()
 
-    def get_board_items(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Retrieves existing board items for in-place incremental diffing."""
-        url = f"{self.base_url}/boards/{self.board_id}/items?limit={limit}"
-        try:
-            resp = self._request("GET", url)
-            if resp.status_code == 200:
-                return resp.json().get("data", [])
-        except Exception as e:
-            print(f"[MiroClient] Error fetching board items: {e}")
-        return []
+    def get_board_items(self, limit: int = 500) -> List[Dict[str, Any]]:
+        """Retrieves existing board items for in-place incremental diffing with pagination."""
+        all_items = []
+        cursor = None
+        fetched = 0
+        page_size = 50  # Miro API max limit
+        
+        while fetched < limit:
+            batch_limit = min(page_size, limit - fetched)
+            url = f"{self.base_url}/boards/{self.board_id}/items?limit={batch_limit}"
+            if cursor:
+                url += f"&cursor={cursor}"
+            
+            try:
+                resp = self._request("GET", url)
+                if resp.status_code != 200:
+                    break
+                data = resp.json()
+                batch_items = data.get("data", [])
+                if not batch_items:
+                    break
+                all_items.extend(batch_items)
+                fetched += len(batch_items)
+                
+                cursor = data.get("cursor")
+                if not cursor:
+                    break
+            except Exception as e:
+                print(f"[MiroClient] Error fetching board items: {e}")
+                break
+        
+        return all_items[:limit]
 
-    def get_board_connectors(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """Retrieves existing board connectors."""
-        url = f"{self.base_url}/boards/{self.board_id}/connectors?limit={limit}"
-        try:
-            resp = self._request("GET", url)
-            if resp.status_code == 200:
-                return resp.json().get("data", [])
-        except Exception as e:
-            print(f"[MiroClient] Error fetching board connectors: {e}")
-        return []
+    def get_board_connectors(self, limit: int = 500) -> List[Dict[str, Any]]:
+        """Retrieves existing board connectors with pagination."""
+        all_connectors = []
+        cursor = None
+        fetched = 0
+        page_size = 50  # Miro API limit per page
+        
+        while fetched < limit:
+            batch_limit = min(page_size, limit - fetched)
+            url = f"{self.base_url}/boards/{self.board_id}/connectors?limit={batch_limit}"
+            if cursor:
+                url += f"&cursor={cursor}"
+            
+            try:
+                resp = self._request("GET", url)
+                if resp.status_code != 200:
+                    break
+                data = resp.json()
+                batch_conns = data.get("data", [])
+                if not batch_conns:
+                    break
+                all_connectors.extend(batch_conns)
+                fetched += len(batch_conns)
+                
+                cursor = data.get("cursor")
+                if not cursor:
+                    break
+            except Exception as e:
+                print(f"[MiroClient] Error fetching board connectors: {e}")
+                break
+        
+        return all_connectors[:limit]
+
 
     def create_shape(self, content: str, x: float, y: float, shape_type: str = "service", width: float = 300, height: float = 140) -> Dict[str, Any]:
         url = f"{self.base_url}/boards/{self.board_id}/shapes"
@@ -476,8 +521,8 @@ class MiroClient:
         min_bound_y = base_y - (frame_h / 2) - 400
         max_bound_y = base_y + (frame_h / 2) + 400
 
-        # Fetch existing board items for in-place diffing
-        existing_items = self.get_board_items(limit=100)
+        # Fetch existing board items for in-place diffing (use higher limit + pagination)
+        existing_items = self.get_board_items(limit=500)
         
         # Categorize items residing in this perspective frame
         existing_shapes_by_name: Dict[str, Dict[str, Any]] = {}
@@ -493,6 +538,32 @@ class MiroClient:
             clean = re.sub(r"<[^>]+>", "", html_str or "").strip()
             return clean.split("\n")[0].strip().lower()
 
+        persp_title_lower = persp_info["title"].lower()
+        
+        # First pass: find the perspective frame anywhere on the board (not just in bounding box)
+        # This handles cases where frame was created with different dimensions
+        for item in existing_items:
+            item_type = item.get("type", "")
+            if item_type == "frame":
+                data = item.get("data", {})
+                if persp_title_lower in data.get("title", "").lower():
+                    existing_frame = item
+                    break
+        
+        # If frame found, recalculate bounds based on actual frame position
+        if existing_frame:
+            frame_pos = existing_frame.get("position", {})
+            frame_geo = existing_frame.get("geometry", {})
+            fx = frame_pos.get("x", base_x)
+            fy = frame_pos.get("y", base_y)
+            fw = frame_geo.get("width", frame_w)
+            fh = frame_geo.get("height", frame_h)
+            min_bound_x = fx - fw/2 - 200
+            max_bound_x = fx + fw/2 + 200
+            min_bound_y = fy - fh/2 - 200
+            max_bound_y = fy + fh/2 + 200
+        
+        # Second pass: categorize items within the (possibly recalculated) perspective region
         for item in existing_items:
             pos = item.get("position", {})
             ix = pos.get("x", 0)
@@ -514,9 +585,7 @@ class MiroClient:
                             existing_shapes_by_name[name_key] = item
                 elif item_type == "sticky_note":
                     existing_sticky_note = item
-                elif item_type == "frame":
-                    if persp_info["title"].lower() in data.get("title", "").lower():
-                        existing_frame = item
+                # Frame already found in first pass
 
         created_nodes_map: Dict[str, str] = {} # node_id -> miro_item_id
         node_coords_map: Dict[str, Dict[str, Any]] = {} # node_id -> {x, y, col_idx, row_idx}
@@ -542,6 +611,7 @@ class MiroClient:
                 print(f"[MiroClient] Error creating frame: {e}")
         if target_frame:
             all_created_items.append(target_frame)
+
 
         # 2. Place / In-Place Update Architecture Summary Card on left
         summary_content = f"<p><strong>{arch_data.get('system_title', 'System Architecture')}</strong></p><br/>" \
@@ -712,17 +782,31 @@ class MiroClient:
                     all_created_items.append(resp)
 
         # 4. Clean up old connectors in frame and wire updated connectors
-        existing_conns = self.get_board_connectors(limit=100)
-        valid_miro_ids = set(created_nodes_map.values())
+        existing_conns = self.get_board_connectors(limit=500)
         
+        # Collect all Miro item IDs associated with this frame/perspective
+        all_perspective_item_ids = set(created_nodes_map.values())
+        all_perspective_item_ids.update(matched_shape_ids)
+        for s in existing_shapes_by_name.values():
+            if isinstance(s, dict) and s.get("id"):
+                all_perspective_item_ids.add(s["id"])
+        for h in existing_header_shapes.values():
+            if isinstance(h, dict) and h.get("id"):
+                all_perspective_item_ids.add(h["id"])
+        if existing_sticky_note and existing_sticky_note.get("id"):
+            all_perspective_item_ids.add(existing_sticky_note["id"])
+
+        conns_to_delete = []
         for c in existing_conns:
             start_item = c.get("startItem", {}).get("id")
             end_item = c.get("endItem", {}).get("id")
-            if start_item in valid_miro_ids or end_item in valid_miro_ids:
-                try:
-                    self.delete_connector(c["id"])
-                except Exception as e:
-                    print(f"[MiroClient] Error clearing old connector {c['id']}: {e}")
+            if start_item in all_perspective_item_ids or end_item in all_perspective_item_ids:
+                conns_to_delete.append(c["id"])
+
+        if conns_to_delete:
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                list(executor.map(self.delete_connector, conns_to_delete))
+
 
         connectors_to_create = []
         for conn in connections:
