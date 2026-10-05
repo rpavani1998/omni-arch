@@ -228,12 +228,12 @@ class ArchitectureEngine:
                                 q.put(("data", f"data: {json.dumps({'type': 'content', 'chunk': content_chunk})}\n\n"))
 
                 duration_ms = int((time.time() - start_time) * 1000)
-                parsed_json = self._parse_json_response(full_content)
+                parsed_json = self._parse_json_response(full_content, codebase_data, perspective)
                 
                 # If content didn't parse a custom diagram, try reasoning text
-                if parsed_json.get("nodes", [])[0].get("id") == "client_ui" and full_reasoning and "{" in full_reasoning:
-                    alt_parsed = self._parse_json_response(full_reasoning)
-                    if alt_parsed and alt_parsed.get("nodes", [])[0].get("id") != "client_ui":
+                if parsed_json.get("nodes", []) and parsed_json.get("nodes", [])[0].get("id") == "client_ui" and full_reasoning and "{" in full_reasoning:
+                    alt_parsed = self._parse_json_response(full_reasoning, codebase_data, perspective)
+                    if alt_parsed and alt_parsed.get("nodes", []) and alt_parsed.get("nodes", [])[0].get("id") != "client_ui":
                         parsed_json = alt_parsed
 
                 final_reasoning = self._generate_reasoning_summary(parsed_json, full_reasoning, full_content, perspective)
@@ -313,12 +313,12 @@ class ArchitectureEngine:
             duration_ms = int((time.time() - start_time) * 1000)
             print(f"[OmniArch Engine] LLM stream finished in {duration_ms}ms (content: {len(full_content)} chars, reasoning: {len(full_reasoning)} chars)")
 
-            parsed_json = self._parse_json_response(full_content)
+            parsed_json = self._parse_json_response(full_content, codebase_data, perspective)
             
             # If content didn't parse a custom diagram, try reasoning text
-            if parsed_json.get("nodes", [])[0].get("id") == "client_ui" and full_reasoning and "{" in full_reasoning:
-                alt_parsed = self._parse_json_response(full_reasoning)
-                if alt_parsed and alt_parsed.get("nodes", [])[0].get("id") != "client_ui":
+            if parsed_json.get("nodes", []) and parsed_json.get("nodes", [])[0].get("id") == "client_ui" and full_reasoning and "{" in full_reasoning:
+                alt_parsed = self._parse_json_response(full_reasoning, codebase_data, perspective)
+                if alt_parsed and alt_parsed.get("nodes", []) and alt_parsed.get("nodes", [])[0].get("id") != "client_ui":
                     parsed_json = alt_parsed
 
             final_reasoning = self._generate_reasoning_summary(parsed_json, full_reasoning, full_content, perspective)
@@ -503,9 +503,11 @@ Output STRICT JSON only with the following schema:
             print(f"[ArchitectureEngine] Direct LLM invocation failed: {e}")
             raise e
 
-    def _parse_json_response(self, text: str) -> Dict[str, Any]:
-        """Cleans, extracts, and repairs JSON safely from model response."""
+    def _parse_json_response(self, text: str, codebase_data: Optional[Dict[str, Any]] = None, perspective: str = "overview") -> Dict[str, Any]:
+        """Cleans, extracts, and repairs JSON safely from model response, falling back to AST codebase synthesis."""
         if not text or not text.strip():
+            if codebase_data:
+                return self._synthesize_from_codebase(codebase_data, perspective)
             return self._get_fallback()
 
         cleaned = text.strip()
@@ -514,55 +516,87 @@ Output STRICT JSON only with the following schema:
         cleaned = re.sub(r'<think>[\s\S]*?</think>', '', cleaned, flags=re.DOTALL).strip()
         cleaned = re.sub(r'<\/?think>', '', cleaned).strip()
 
-        # 2. Extract from markdown code blocks if present
+        # Helper to try parsing JSON with multiple aggressive repair techniques
+        def try_parse(s: str) -> Optional[Dict[str, Any]]:
+            if not s or "{" not in s:
+                return None
+            s_clean = s.strip()
+            # Strip JS/C-style comments
+            s_clean = re.sub(r'//.*', '', s_clean)
+            s_clean = re.sub(r'/\*[\s\S]*?\*/', '', s_clean)
+            
+            # Direct parse
+            try:
+                data = json.loads(s_clean)
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+
+            # Trailing comma fix
+            try:
+                no_trailing = re.sub(r",\s*([\]}])", r"\1", s_clean)
+                data = json.loads(no_trailing)
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+
+            # Python literal conversions (True -> true, False -> false, None -> null)
+            try:
+                py_fixed = re.sub(r'\bTrue\b', 'true', s_clean)
+                py_fixed = re.sub(r'\bFalse\b', 'false', py_fixed)
+                py_fixed = re.sub(r'\bNone\b', 'null', py_fixed)
+                py_fixed = re.sub(r",\s*([\]}])", r"\1", py_fixed)
+                data = json.loads(py_fixed)
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+
+            # Unmatched braces auto-repair
+            try:
+                start_i = s_clean.find("{")
+                if start_i != -1:
+                    partial = s_clean[start_i:]
+                    open_braces = partial.count("{") - partial.count("}")
+                    open_brackets = partial.count("[") - partial.count("]")
+                    repaired = partial.rstrip().rstrip(",") + ("]" * max(0, open_brackets)) + ("}" * max(0, open_braces))
+                    repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
+                    data = json.loads(repaired)
+                    if isinstance(data, dict):
+                        return data
+            except Exception:
+                pass
+
+            return None
+
         candidate_json = None
+
+        # 2. Extract from markdown code blocks if present
         if "```" in cleaned:
-            # First look for ```json ... ``` or any code block containing { and }
-            blocks = re.findall(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+            blocks = re.findall(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned, re.IGNORECASE)
             for b in blocks:
                 b_str = b.strip()
                 if "{" in b_str and "}" in b_str:
                     s_idx = b_str.find("{")
                     e_idx = b_str.rfind("}")
                     if s_idx != -1 and e_idx > s_idx:
-                        snippet = b_str[s_idx:e_idx + 1]
-                        try:
-                            candidate_json = json.loads(snippet)
+                        candidate_json = try_parse(b_str[s_idx:e_idx + 1])
+                        if candidate_json:
                             break
-                        except Exception:
-                            try:
-                                candidate_json = json.loads(re.sub(r",\s*([\]}])", r"\1", snippet))
-                                break
-                            except Exception:
-                                pass
 
-        # 3. If not found in code blocks, extract from raw text
+        # 3. If not found in code blocks, extract from outermost braces in raw text
         if not candidate_json:
             start_idx = cleaned.find("{")
             end_idx = cleaned.rfind("}")
             if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                json_str = cleaned[start_idx:end_idx + 1]
-                try:
-                    candidate_json = json.loads(json_str)
-                except Exception:
-                    try:
-                        cleaned_commas = re.sub(r",\s*([\]}])", r"\1", json_str)
-                        candidate_json = json.loads(cleaned_commas)
-                    except Exception:
-                        pass
+                candidate_json = try_parse(cleaned[start_idx:end_idx + 1])
 
-        # 4. If truncated, attempt bracket auto-closing
+        # 4. Fallback attempt across any bracket substring
         if not candidate_json and "{" in cleaned:
             start_idx = cleaned.find("{")
-            partial_json = cleaned[start_idx:]
-            open_braces = partial_json.count("{") - partial_json.count("}")
-            open_brackets = partial_json.count("[") - partial_json.count("]")
-            repaired = partial_json.rstrip().rstrip(",") + ("]" * max(0, open_brackets)) + ("}" * max(0, open_braces))
-            repaired = re.sub(r",\s*([\]}])", r"\1", repaired)
-            try:
-                candidate_json = json.loads(repaired)
-            except Exception:
-                pass
+            candidate_json = try_parse(cleaned[start_idx:])
 
         # Normalize parsed architecture
         if isinstance(candidate_json, dict):
@@ -627,7 +661,7 @@ Output STRICT JSON only with the following schema:
                         cleaned_nodes.append({
                             "id": nid,
                             "name": nname,
-                            "layer_id": lid if lid.startswith("layer_") else f"layer_{lid}",
+                            "layer_id": lid if lid.startswith("layer_") or lid.startswith("tier_") else f"layer_{lid}",
                             "type": n.get("type", "service"),
                             "tech": n.get("tech", "Python / Cloud"),
                             "description": n.get("description", "Core system component"),
@@ -658,6 +692,9 @@ Output STRICT JSON only with the following schema:
                     })
                 }
 
+        # If LLM failed to return structured nodes, synthesize from codebase AST
+        if codebase_data:
+            return self._synthesize_from_codebase(codebase_data, perspective)
         return self._get_fallback()
 
     def _synthesize_from_codebase(self, codebase_data: Dict[str, Any], perspective: str = "overview") -> Dict[str, Any]:
