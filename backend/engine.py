@@ -263,6 +263,7 @@ class ArchitectureEngine:
         client, target_model, provider_label = self._get_client_and_model(provider, api_key, base_url, model_name)
         
         user_message = self._build_context(codebase_data, perspective, custom_instructions)
+        print(f"[OmniArch Engine] Initiating analysis with provider='{provider}' model='{target_model}' endpoint='{client.base_url}'")
         try:
             # Use streaming internally for better provider compatibility
             stream = client.chat.completions.create(
@@ -291,6 +292,8 @@ class ArchitectureEngine:
                         full_content += content_chunk
 
             duration_ms = int((time.time() - start_time) * 1000)
+            print(f"[OmniArch Engine] LLM stream finished in {duration_ms}ms (content: {len(full_content)} chars, reasoning: {len(full_reasoning)} chars)")
+
             parsed_json = self._parse_json_response(full_content)
             
             # If content didn't parse a custom diagram, try reasoning text
@@ -310,8 +313,9 @@ class ArchitectureEngine:
                 "provider": provider_label,
                 "reasoning": full_reasoning
             }
+            print(f"[OmniArch Engine] Generated architecture with {len(parsed_json.get('nodes', []))} nodes and {len(parsed_json.get('connections', []))} connections")
         except Exception as e:
-            print(f"[ArchitectureEngine] Streaming LLM call failed ({e}). Synthesizing architectural graph from AST signatures...")
+            print(f"[OmniArch Engine WARNING] Upstream LLM call failed: {e}. Synthesizing architectural graph from AST code signatures...")
             parsed_json = self._synthesize_from_codebase(codebase_data, perspective)
             duration_ms = int((time.time() - start_time) * 1000)
 
@@ -320,7 +324,7 @@ class ArchitectureEngine:
                 "duration_ms": duration_ms,
                 "model": f"{target_model} (AST fallback)",
                 "provider": provider_label,
-                "reasoning": f"Synthesized architectural topology from code AST signatures due to upstream latency: {e}"
+                "reasoning": f"Synthesized architectural topology from code AST signatures due to upstream latency/error: {e}"
             }
 
         return {
@@ -448,33 +452,50 @@ Output STRICT JSON only with the following schema:
 
         cleaned = text.strip()
         
-        # Extract from markdown block if present
-        if "```" in cleaned:
-            match = re.search(r"```(?:json)?\s*(\{[\s\S]*?\})\s*```", cleaned)
-            if match:
-                cleaned = match.group(1)
-            else:
-                cleaned = re.sub(r"```(?:json)?", "", cleaned).replace("```", "").strip()
+        # 1. Strip reasoning/think tags (e.g. DeepSeek R1, Qwen Thinking models)
+        cleaned = re.sub(r'<think>[\s\S]*?</think>', '', cleaned, flags=re.DOTALL).strip()
+        cleaned = re.sub(r'<\/?think>', '', cleaned).strip()
 
-        # Find first { and last }
-        start_idx = cleaned.find("{")
-        end_idx = cleaned.rfind("}")
-        
+        # 2. Extract from markdown code blocks if present
         candidate_json = None
-        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-            json_str = cleaned[start_idx:end_idx + 1]
-            try:
-                candidate_json = json.loads(json_str)
-            except Exception:
-                # Try cleaning trailing commas
-                try:
-                    cleaned_commas = re.sub(r",\s*([\]}])", r"\1", json_str)
-                    candidate_json = json.loads(cleaned_commas)
-                except Exception:
-                    pass
+        if "```" in cleaned:
+            # First look for ```json ... ``` or any code block containing { and }
+            blocks = re.findall(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+            for b in blocks:
+                b_str = b.strip()
+                if "{" in b_str and "}" in b_str:
+                    s_idx = b_str.find("{")
+                    e_idx = b_str.rfind("}")
+                    if s_idx != -1 and e_idx > s_idx:
+                        snippet = b_str[s_idx:e_idx + 1]
+                        try:
+                            candidate_json = json.loads(snippet)
+                            break
+                        except Exception:
+                            try:
+                                candidate_json = json.loads(re.sub(r",\s*([\]}])", r"\1", snippet))
+                                break
+                            except Exception:
+                                pass
 
-        # If start_idx exists but end_idx is truncated, attempt auto-closing
-        if not candidate_json and start_idx != -1:
+        # 3. If not found in code blocks, extract from raw text
+        if not candidate_json:
+            start_idx = cleaned.find("{")
+            end_idx = cleaned.rfind("}")
+            if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                json_str = cleaned[start_idx:end_idx + 1]
+                try:
+                    candidate_json = json.loads(json_str)
+                except Exception:
+                    try:
+                        cleaned_commas = re.sub(r",\s*([\]}])", r"\1", json_str)
+                        candidate_json = json.loads(cleaned_commas)
+                    except Exception:
+                        pass
+
+        # 4. If truncated, attempt bracket auto-closing
+        if not candidate_json and "{" in cleaned:
+            start_idx = cleaned.find("{")
             partial_json = cleaned[start_idx:]
             open_braces = partial_json.count("{") - partial_json.count("}")
             open_brackets = partial_json.count("[") - partial_json.count("]")
