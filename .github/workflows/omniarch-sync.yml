@@ -6,6 +6,26 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      perspective:
+        description: 'SDLC Perspective'
+        required: false
+        default: 'overview'
+        type: choice
+        options:
+          - overview
+          - data_flow
+          - database_storage
+          - devops_pipeline
+          - security_auth
+          - async_workers
+          - observability
+          - ai_rag
+      custom_instructions:
+        description: 'Custom Focus Directives'
+        required: false
+        default: 'Highlight core services, API routes, and database entities'
+        type: string
 
 jobs:
   sync-architecture:
@@ -21,7 +41,10 @@ jobs:
         with:
           miro-access-token: ${{ secrets.MIRO_ACCESS_TOKEN }}
           miro-board-id: ${{ secrets.MIRO_BOARD_ID }}
-          perspective: 'overview'
-          custom-instructions: 'Highlight public API endpoints and database trust boundaries'
-          ai-provider: 'modelscope'
-          ai-api-key: ${{ secrets.MODELSCOPE_API_KEY }}
+          perspective: ${{ inputs.perspective || 'overview' }}
+          custom-instructions: ${{ inputs.custom_instructions || 'Highlight core services, API routes, and database entities' }}
+          ai-provider: ${{ secrets.AI_PROVIDER || 'custom' }}
+          ai-base-url: ${{ secrets.AI_BASE_URL || 'https://openrouter.ai/api/v1' }}
+          ai-model-name: ${{ secrets.AI_MODEL_NAME || 'qwen/qwen-2.5-coder-32b-instruct' }}
+          ai-api-key: ${{ secrets.AI_API_KEY || secrets.OPENROUTER_API_KEY || secrets.MODELSCOPE_API_KEY }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
