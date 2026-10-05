@@ -1,15 +1,12 @@
 import unittest
-from backend.engine import ArchitectureEngine, OmniEngine
+from backend.engine import ArchitectureEngine
 
 class TestArchitectureEngine(unittest.TestCase):
     def setUp(self):
-        # Universal architecture engine initialization
         self.engine = ArchitectureEngine()
-        self.omni_engine = OmniEngine()
 
     def test_engine_initialization(self):
         self.assertIsNotNone(self.engine)
-        self.assertIsNotNone(self.omni_engine)
 
     def test_fallback_schema_structure(self):
         arch = self.engine._get_fallback()
